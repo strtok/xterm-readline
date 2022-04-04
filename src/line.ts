@@ -232,7 +232,7 @@ export class LineBuffer {
   }
 
   public delete(n: RepeatCount): boolean {
-    const nextChar = this.nextPos(1);
+    const nextChar = this.nextPos(n);
     if (nextChar !== undefined) {
       this.buf = this.buf.slice(0, this.pos) + this.buf.slice(nextChar);
       return true;

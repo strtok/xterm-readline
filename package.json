@@ -24,7 +24,7 @@
     "build": "tsc -p .",
     "build:live": "nodemon --watch 'src/**/*.ts' --exec \"ts-node\" src/readline.ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "tslint -p tsconfig.json",
+    "lint": "eslint . --ext .ts",
     "prepare": "npm run build",
     "preversion": "npm run lint",
     "package": "../../node_modules/.bin/webpack",
@@ -43,8 +43,6 @@
     "prettier": "^2.6.2",
     "ts-jest": "^27.1.3",
     "ts-node": "^10.7.0",
-    "tslint": "^6.1.3",
-    "tslint-config-prettier": "^1.18.0",
     "typescript": "^4.6.2"
   },
   "peerDependencies": {

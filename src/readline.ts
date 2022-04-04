@@ -35,6 +35,7 @@ export class Readline implements ITerminalAddon {
   private ctrlCHandler: CtrlCHandler = () => {
     return;
   };
+
   private pauseHandler: PauseHandler = (resume: boolean) => {
     return;
   };
