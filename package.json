@@ -20,6 +20,7 @@
     "build:live": "nodemon --watch 'src/**/*.ts' --exec \"ts-node\" src/readline.ts",
     "prepackage": "npm run build",
     "package": "../../node_modules/.bin/webpack",
+    "prepublish": "tsc",
     "prepublishOnly": "npm run package",
     "test": "jest"
   },

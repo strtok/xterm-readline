@@ -271,8 +271,6 @@ export class Readline implements ITerminalAddon {
         break;
       case InputType.UnsupportedControlChar:
       case InputType.UnsupportedEscape:
-        console.error("unsupported key:");
-        console.dir(input);
         break;
     }
   }
