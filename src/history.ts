@@ -9,23 +9,23 @@ export class History {
 
   public saveToLocalStorage() {
     const localStorage = window?.localStorage;
-    if (localStorage != undefined) {
+    if (localStorage !== undefined) {
       localStorage.setItem("history", JSON.stringify(this.entries));
     }
   }
 
   public restoreFromLocalStorage() {
-    let localStorage = window?.localStorage;
-    if (localStorage != undefined) {
+    const localStorage = window?.localStorage;
+    if (localStorage !== undefined) {
       const historyJson = localStorage.getItem("history");
-      if (historyJson == undefined) {
+      if (historyJson === undefined || historyJson === null) {
         return;
       }
       try {
         const historyEntries: string[] = JSON.parse(historyJson);
         if (
           !Array.isArray(historyEntries) ||
-          historyEntries.find((it) => typeof it != "string") != undefined
+          historyEntries.find((it) => typeof it !== "string") !== undefined
         ) {
           this.entries = [];
           localStorage.setItem("history", "[]");
@@ -58,7 +58,7 @@ export class History {
   }
 
   public next(): string | undefined {
-    if (this.cursor == -1) {
+    if (this.cursor === -1) {
       return undefined;
     } else {
       this.cursor -= 1;

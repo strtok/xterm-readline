@@ -30,7 +30,7 @@ export class LineBuffer {
 
   public insert(text: string): boolean {
     const shift = text.length;
-    const push = this.pos == this.buf.length;
+    const push = this.pos === this.buf.length;
     if (push) {
       this.buf = this.buf + text;
     } else {
@@ -42,7 +42,7 @@ export class LineBuffer {
 
   public moveBack(n: number): boolean {
     const pos = this.prevPos(n);
-    if (pos != undefined) {
+    if (pos !== undefined) {
       this.pos = pos;
       return true;
     } else {
@@ -52,7 +52,7 @@ export class LineBuffer {
 
   public moveForward(n: number): boolean {
     const pos = this.nextPos(n);
-    if (pos != undefined) {
+    if (pos !== undefined) {
       this.pos = pos;
       return true;
     } else {
@@ -61,7 +61,7 @@ export class LineBuffer {
   }
 
   public moveHome(): boolean {
-    let start = this.startOfLine();
+    const start = this.startOfLine();
     if (this.pos > start) {
       this.pos = start;
       return true;
@@ -70,8 +70,8 @@ export class LineBuffer {
   }
 
   public moveEnd(): boolean {
-    let end = this.endOfLine();
-    if (this.pos == end) {
+    const end = this.endOfLine();
+    if (this.pos === end) {
       return false;
     }
     this.pos = end;
@@ -79,8 +79,8 @@ export class LineBuffer {
   }
 
   public startOfLine(): number {
-    let start = this.buf.slice(0, this.pos).lastIndexOf("\n");
-    if (start != -1) {
+    const start = this.buf.slice(0, this.pos).lastIndexOf("\n");
+    if (start !== -1) {
       return start + 1;
     } else {
       return 0;
@@ -88,8 +88,8 @@ export class LineBuffer {
   }
 
   public endOfLine(): number {
-    let end = this.buf.slice(this.pos).indexOf("\n");
-    if (end != -1) {
+    const end = this.buf.slice(this.pos).indexOf("\n");
+    if (end !== -1) {
       return this.pos + end;
     } else {
       return this.buf.length;
@@ -98,12 +98,12 @@ export class LineBuffer {
 
   public moveLineUp(n: number): boolean {
     const off = this.buf.slice(0, this.pos).lastIndexOf("\n");
-    if (off == -1) {
+    if (off === -1) {
       return false;
     }
     const column = [...this.buf.slice(off + 1, this.pos)].length;
     let destStart = this.buf.slice(0, off).lastIndexOf("\n");
-    if (destStart == -1) {
+    if (destStart === -1) {
       destStart = 0;
     } else {
       destStart = destStart + 1;
@@ -111,12 +111,12 @@ export class LineBuffer {
     let destEnd = off;
 
     for (let i = 1; i < n; i++) {
-      if (destStart == 0) {
+      if (destStart === 0) {
         break;
       }
       destEnd = destStart - 1;
       destStart = this.buf.slice(0, destEnd).lastIndexOf("\n");
-      if (destStart == -1) {
+      if (destStart === -1) {
         destStart = 0;
       } else {
         destStart = destStart + 1;
@@ -127,7 +127,7 @@ export class LineBuffer {
 
     let gIdx = off;
     if (slice.length > 0) {
-      gIdx = slice.map((c) => c.length).reduce((acc, n) => acc + n, 0);
+      gIdx = slice.map((c) => c.length).reduce((acc, m) => acc + m, 0);
       gIdx = destStart + gIdx;
     }
     this.pos = gIdx;
@@ -136,12 +136,12 @@ export class LineBuffer {
 
   public moveLineDown(n: number): boolean {
     const off = this.buf.slice(this.pos).indexOf("\n");
-    if (off == -1) {
+    if (off === -1) {
       return false;
     }
 
     let lineStart = this.buf.slice(0, this.pos).lastIndexOf("\n");
-    if (lineStart == -1) {
+    if (lineStart === -1) {
       lineStart = 0;
     } else {
       lineStart += 1;
@@ -151,19 +151,19 @@ export class LineBuffer {
     let destStart = this.pos + off + 1;
 
     let destEnd = this.buf.slice(destStart).indexOf("\n");
-    if (destEnd == -1) {
+    if (destEnd === -1) {
       destEnd = this.buf.length;
     } else {
       destEnd = destStart + destEnd;
     }
 
     for (let i = 1; i < n; i++) {
-      if (destEnd == this.buf.length) {
+      if (destEnd === this.buf.length) {
         break;
       }
       destStart = destEnd + 1;
       destEnd = this.buf.slice(destStart).indexOf("\n");
-      if (destEnd == -1) {
+      if (destEnd === -1) {
         destEnd = this.buf.length;
       } else {
         destEnd = destStart + destEnd;
@@ -176,7 +176,7 @@ export class LineBuffer {
         slice
           .slice(0, column)
           .map((c) => c.length)
-          .reduce((acc, n) => acc + n, 0) + destStart;
+          .reduce((acc, m) => acc + m, 0) + destStart;
     } else {
       this.pos = destEnd;
     }
@@ -192,7 +192,7 @@ export class LineBuffer {
   // Return the position of the character preceding
   // pos
   public prevPos(n: RepeatCount): number | undefined {
-    if (this.pos == 0) {
+    if (this.pos === 0) {
       return undefined;
     }
     const buf = this.buf.slice(0, this.pos);
@@ -201,14 +201,14 @@ export class LineBuffer {
       [...buf]
         .slice(-n)
         .map((c) => c.length)
-        .reduce((acc, n) => acc + n, 0)
+        .reduce((acc, m) => acc + m, 0)
     );
   }
 
   // Return the position of the character following the
   // current pos
   public nextPos(n: RepeatCount): number | undefined {
-    if (this.pos == this.buf.length) {
+    if (this.pos === this.buf.length) {
       return undefined;
     }
     const buf = this.buf.slice(this.pos);
@@ -217,13 +217,13 @@ export class LineBuffer {
       [...buf]
         .slice(0, n)
         .map((c) => c.length)
-        .reduce((acc, n) => acc + n, 0)
+        .reduce((acc, m) => acc + m, 0)
     );
   }
 
   public backspace(n: RepeatCount): boolean {
     const newPos = this.prevPos(n);
-    if (newPos == undefined) {
+    if (newPos === undefined) {
       return false;
     }
     this.buf = this.buf.slice(0, newPos) + this.buf.slice(this.pos);
@@ -232,8 +232,8 @@ export class LineBuffer {
   }
 
   public delete(n: RepeatCount): boolean {
-    let nextChar = this.nextPos(1);
-    if (nextChar != undefined) {
+    const nextChar = this.nextPos(1);
+    if (nextChar !== undefined) {
       this.buf = this.buf.slice(0, this.pos) + this.buf.slice(nextChar);
       return true;
     } else {

@@ -45,7 +45,7 @@ function* splitInput(data: string) {
     }
 
     const val = c.charCodeAt(0);
-    if (text.length > 0 && (val < 0x20 || val == 0x7f)) {
+    if (text.length > 0 && (val < 0x20 || val === 0x7f)) {
       yield {
         inputType: InputType.Text,
         data: text,
@@ -53,7 +53,7 @@ function* splitInput(data: string) {
       text = [];
     }
 
-    if (val == 0x1b) {
+    if (val === 0x1b) {
       const seq2 = it.next();
       if (seq2.done) {
         text.push("\x1b");
@@ -61,8 +61,8 @@ function* splitInput(data: string) {
       }
 
       // Console
-      if (seq2.value != "[") {
-        let inputType = InputType.UnsupportedEscape;
+      let inputType = InputType.UnsupportedEscape;
+      if (seq2.value !== "[") {
         switch (seq2.value) {
           case "\r":
             inputType = InputType.AltEnter;
@@ -80,7 +80,6 @@ function* splitInput(data: string) {
       if (seq3.done) {
         continue;
       }
-      let inputType = InputType.UnsupportedEscape;
 
       // vt sequence
       if (seq3.value >= "0" && seq3.value <= "9") {
@@ -91,7 +90,7 @@ function* splitInput(data: string) {
         }
         if (nextDigit.value >= "0" && nextDigit.value <= "9") {
           digit += nextDigit.value;
-        } else if (nextDigit.value != "~") {
+        } else if (nextDigit.value !== "~") {
           continue;
         }
         switch (digit) {
@@ -136,7 +135,7 @@ function* splitInput(data: string) {
       continue;
     }
 
-    if (val < 0x20 || val == 0x7f) {
+    if (val < 0x20 || val === 0x7f) {
       let inputType = InputType.UnsupportedControlChar;
       switch (val) {
         case 0x1:

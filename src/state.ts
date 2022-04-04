@@ -1,3 +1,4 @@
+/* tslint:disable:max-classes-per-file */
 import { LineBuffer } from "./line";
 import { Tty } from "./tty";
 import { History } from "./history";
@@ -9,12 +10,12 @@ export class Position {
   public row: number;
 
   constructor(rows?: number, cols?: number) {
-    if (rows != undefined) {
+    if (rows !== undefined) {
       this.row = rows;
     } else {
       this.row = 0;
     }
-    if (cols != undefined) {
+    if (cols !== undefined) {
       this.col = cols;
     } else {
       this.col = 0;
@@ -63,7 +64,7 @@ export class State {
   }
 
   public shouldHighlight(): boolean {
-    let highlighting = this.highlighter.highlightChar(
+    const highlighting = this.highlighter.highlightChar(
       this.line.buf,
       this.line.pos
     );
@@ -184,21 +185,21 @@ export class State {
   }
 
   public previousHistory() {
-    if (this.history.cursor == -1 && this.line.length() > 0) {
+    if (this.history.cursor === -1 && this.line.length() > 0) {
       return;
     }
     const prev = this.history.prev();
-    if (prev != undefined) {
+    if (prev !== undefined) {
       this.update(prev);
     }
   }
 
   public nextHistory() {
-    if (this.history.cursor == -1) {
+    if (this.history.cursor === -1) {
       return;
     }
     const next = this.history.next();
-    if (next != undefined) {
+    if (next !== undefined) {
       this.update(next);
     } else {
       this.update("");
@@ -210,7 +211,7 @@ export class State {
       this.line.pos_buffer(),
       this.promptSize
     );
-    if (cursor == this.layout.cursor) {
+    if (cursor === this.layout.cursor) {
       return;
     }
     if (this.shouldHighlight()) {

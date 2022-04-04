@@ -46,11 +46,7 @@ export class Readline implements ITerminalAddon {
   public activate(term: Terminal): void {
     this.term = term;
     this.term.onData(this.readData.bind(this));
-    // this.term.onCursorMove(() => {
-    //     console.log(`cursor: ${this.term?.buffer.active.cursorX}, ${this.term?.buffer.active.cursorY}`);
-    // });
     this.term.attachCustomKeyEventHandler(this.handleKeyEvent.bind(this));
-    this.term.options;
   }
 
   public dispose(): void {
@@ -82,7 +78,7 @@ export class Readline implements ITerminalAddon {
   }
 
   public write(text: string) {
-    if (text == "\n") {
+    if (text === "\n") {
       text = "\r\n";
     } else {
       text = text.replace(/([^\r])\n/g, "$1\r\n");
@@ -116,7 +112,7 @@ export class Readline implements ITerminalAddon {
   }
 
   public tty(): Tty {
-    if (this.term?.options?.tabStopWidth != undefined) {
+    if (this.term?.options?.tabStopWidth !== undefined) {
       return new Tty(
         this.term.cols,
         this.term.rows,
@@ -130,7 +126,7 @@ export class Readline implements ITerminalAddon {
 
   public read(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      if (this.term == undefined) {
+      if (this.term === undefined) {
         reject("addon is not active");
         return;
       }
@@ -147,7 +143,7 @@ export class Readline implements ITerminalAddon {
 
   private handleKeyEvent(event: KeyboardEvent): boolean {
     if (event.key === "Enter" && event.shiftKey) {
-      if (event.type == "keydown") {
+      if (event.type === "keydown") {
         this.readKey({
           inputType: InputType.ShiftEnter,
           data: ["\r"],
@@ -162,7 +158,7 @@ export class Readline implements ITerminalAddon {
     const input = parseInput(data);
     if (
       input.length > 1 ||
-      (input[0].inputType == InputType.Text && input[0].data.length > 1)
+      (input[0].inputType === InputType.Text && input[0].data.length > 1)
     ) {
       this.readPaste(input);
       return;
@@ -172,14 +168,14 @@ export class Readline implements ITerminalAddon {
 
   private readPaste(input: Input[]) {
     const mappedInput = input.map((it) => {
-      if (it.inputType == InputType.Enter) {
+      if (it.inputType === InputType.Enter) {
         return { inputType: InputType.Text, data: ["\n"] };
       }
       return it;
     });
 
     for (const it of mappedInput) {
-      if (it.inputType == InputType.Text) {
+      if (it.inputType === InputType.Text) {
         this.state.editInsert(it.data.join(""));
       } else {
         this.readKey(it);
@@ -188,7 +184,7 @@ export class Readline implements ITerminalAddon {
   }
 
   private readKey(input: Input) {
-    if (this.activeRead == undefined) {
+    if (this.activeRead === undefined) {
       switch (input.inputType) {
         case InputType.CtrlC:
           this.ctrlCHandler();
