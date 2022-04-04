@@ -23,6 +23,7 @@
     "dev": "tsc --watch -p .",
     "build": "tsc -p .",
     "build:live": "nodemon --watch 'src/**/*.ts' --exec \"ts-node\" src/readline.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
     "lint": "tslint -p tsconfig.json",
     "prepackage": "npm run build",
     "package": "../../node_modules/.bin/webpack",
