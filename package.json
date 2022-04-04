@@ -1,5 +1,5 @@
 {
-  "name": "readline",
+  "name": "xterm-readline",
   "version": "1.0.0",
   "description": "xterm-js readline addon",
   "main": "lib/readline.js",
