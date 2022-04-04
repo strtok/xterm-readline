@@ -1,1 +1,7 @@
+jest.config.js
+src
+tsconfig.json
+tslint.json
+.prettierrc.json
+.prettierignore
 *.tgz
