@@ -2,7 +2,16 @@
   "name": "xterm-readline",
   "version": "1.0.0",
   "description": "xterm-js readline addon",
+  "keywords": ["xterm", "readline", "cli", "terminal"],
   "main": "lib/readline.js",
+  "author": "Erik Bremen <strtok@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/strtok/xterm-readline",
+  "bugs": "https://github.com/strtok/xterm-readline/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/strtok/xterm-readline.git"
+  },
   "scripts": {
     "start": "npm run build:live",
     "dev": "tsc --watch -p .",
@@ -13,9 +22,6 @@
     "prepublishOnly": "npm run package",
     "test": "jest"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "devDependencies": {
     "@types/jest": "^27.4.1",
     "@types/node": "^17.0.21",
