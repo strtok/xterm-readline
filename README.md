@@ -26,7 +26,7 @@ Enter           | Apply the line, or begin a new line in multiline mode
 Alt/Shift Enter | Force add \n to the input
 Ctrl-U       | Clear line
 
-# Real Life Projects
+# Real World Uses
 
 * [Marwood](https://github.com/strtok/marwood)
 
