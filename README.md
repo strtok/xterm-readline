@@ -10,6 +10,51 @@ Large parts of this source are inspired / derived / ported from the MIT licensed
 * Extendable syntax highlighting
 * Unicode / multi column-width character support
 
+# Example
+
+This is a multi-line example that treats any line ending with '&&' as a continuation.
+
+```typescript
+import "xterm/css/xterm.css";
+import { Terminal } from 'xterm';
+import { Readline } from "xterm-readline";
+
+const term = new Terminal({
+  theme: {
+        background: "#191A19",
+        foreground: "#F5F2E7",
+  },
+  cursorBlink: true,
+  cursorStyle: "block"
+});
+
+const rl = new Readline();
+
+term.loadAddon(rl);
+term.open(document.getElementById('terminal'));
+term.focus();
+
+rl.setCheckHandler((text) => {
+  let trimmedText = text.trimEnd();
+  if (trimmedText.endsWith("&&")) {
+    return false;
+  }
+  return true;
+});
+
+function readLine() {
+  rl.read(">")
+    .then(processLine);
+}
+
+function processLine(text) {
+  rl.println("you entered: " + text);
+  setTimeout(readLine);
+}
+
+readLine();
+```
+
 # Keyboard Shortcuts
 
 Key             | Action
