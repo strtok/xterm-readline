@@ -43,47 +43,99 @@ export class Readline implements ITerminalAddon {
     this.history.restoreFromLocalStorage();
   }
 
+  /**
+   * Activate this addon - this function is called by xterm's
+   * loadAddon().
+   *
+   * @param term - The terminal this readline is attached to.
+   */
   public activate(term: Terminal): void {
     this.term = term;
     this.term.onData(this.readData.bind(this));
     this.term.attachCustomKeyEventHandler(this.handleKeyEvent.bind(this));
   }
 
+  /**
+   * Dispose
+   *
+   */
   public dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
 
+  /**
+   * Manually append a line to the top of the readline's history.
+   *
+   * @param text - The text to append to history.
+   */
   public appendHistory(text: string) {
     this.history.append(text);
   }
 
+  /**
+   * Set the highlighter handler for this readline. This is used to
+   * create custom highlighting functionality (e.g. for syntax highlighting
+   * or bracket matching).
+   *
+   * @param highlighter - A handler to handle all highlight callbacks.
+   */
   public setHighlighter(highlighter: Highlighter) {
     this.highlighter = highlighter;
   }
 
+  /**
+   * Set the check callback. This callback is used by readline to determine if input
+   * requires additiona lines when the user presses 'enter'.
+   *
+   * @param fn - A function (string) -> boolean that should return true if the input
+   *             is complete, and false if a line (\n) should be added to the input.
+   */
   public setCheckHandler(fn: CheckHandler) {
     this.checkHandler = fn;
   }
 
+  /**
+   * Set the ctrl-c handler. This function will be called if ctrl-c is encountered
+   * between readline reads. This may be used in circumstances where input from the
+   * user may result in a long running task that can be cancelled.
+   *
+   * @param fn - The ctrl-c handler.
+   */
   public setCtrlCHandler(fn: CtrlCHandler) {
     this.ctrlCHandler = fn;
   }
 
+  /**
+   * Set the callback to be called when the user presses ctrl-s/ctrl-q.
+   *
+   * @param fn - The pause handler
+   */
   public setPauseHandler(fn: PauseHandler) {
     this.pauseHandler = fn;
   }
 
+  /**
+   * writeReady() may be used to implement basic output flow control. This function
+   * will return false if the writes to the terminal initiated by Readline have
+   * reached a highwater mark.
+   *
+   * @returns true if this terminal is accepting more input.
+   */
   public writeReady(): boolean {
     return !this.highWater;
   }
 
+  /**
+   * Write text to the terminal.
+   *
+   * @param text - The text to write to the terminal.
+   */
   public write(text: string) {
     if (text === "\n") {
       text = "\r\n";
     } else {
       text = text.replace(/([^\r])\n/g, "$1\r\n");
     }
-    // console.trace([...text]);
     const outputLength = text.length;
     this.watermark += outputLength;
     if (this.watermark > this.highWatermark) {
@@ -99,18 +151,39 @@ export class Readline implements ITerminalAddon {
     }
   }
 
+  /**
+   * Write text to the terminal.
+   *
+   * @param text - The text to write to the terminal
+   */
   public print(text: string) {
     return this.write(text);
   }
 
+  /**
+   * Write text to the terminal and append with "\r\n".
+   *
+   * @param text - The text to write to the terminal./
+   * @returns
+   */
   public println(text: string) {
     return this.write(text + "\r\n");
   }
 
+  /**
+   * Obtain an output interface to this terminal.
+   *
+   * @returns Output
+   */
   public output(): Output {
     return this;
   }
 
+  /**
+   * Obtain a tty interface to this terminal.
+   *
+   * @returns A tty
+   */
   public tty(): Tty {
     if (this.term?.options?.tabStopWidth !== undefined) {
       return new Tty(
@@ -124,6 +197,14 @@ export class Readline implements ITerminalAddon {
     }
   }
 
+  /**
+   * Display the given prompt and wait for one line of input from the
+   * terminal. The returned promise will be executed when a line has been
+   * read from the terminal.
+   *
+   * @param prompt The prompt to use.
+   * @returns A promise to be called when the input has been read.
+   */
   public read(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
       if (this.term === undefined) {
