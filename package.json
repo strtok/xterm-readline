@@ -1,6 +1,6 @@
 {
   "name": "xterm-readline",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "xterm-js readline addon",
   "keywords": [
     "xterm",
