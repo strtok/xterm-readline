@@ -1,4 +1,4 @@
-# Xterm.js ReadLine
+# Xterm.js Readline
 [![node ci](https://github.com/strtok/xterm-readline/actions/workflows/node.js.yml/badge.svg)](https://github.com/strtok/xterm-readline/actions/workflows/node.js.yml)
 
 This is an xterm-js addon that provides a readline like capability to xterm-js. It allows the creation of cli or repl like interfaces on top of xterm-js.
