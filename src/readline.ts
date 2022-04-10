@@ -135,7 +135,8 @@ export class Readline implements ITerminalAddon {
     if (text === "\n") {
       text = "\r\n";
     } else {
-      text = text.replace(/(?<!\r)\n/g, "\r\n");
+      text = text.replace(/^\n/, "\r\n");
+      text = text.replace(/([^\r])\n/g, "$1\r\n");
     }
     const outputLength = text.length;
     this.watermark += outputLength;
