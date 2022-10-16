@@ -70,7 +70,8 @@ Ctrl-C          | Cancel line in progress (additionally call ctrl-c callback if 
 Ctrl-D, Del     | Delete the character under the cursor
 Enter           | Apply the line, or begin a new line in multiline mode
 Alt/Shift Enter | Force add \n to the input
-Ctrl-U       | Clear line
+Ctrl-U          | Clear line
+Ctrl-K          | Delete text from cursor to end of line
 
 # Real World Uses
 
