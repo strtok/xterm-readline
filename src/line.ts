@@ -240,4 +240,20 @@ export class LineBuffer {
       return false;
     }
   }
+
+  public deleteEndOfLine(): boolean {
+    if (this.buf.length == 0 || this.pos == this.buf.length) {
+      return false;
+    }
+
+    const start = this.pos;
+    const end = this.endOfLine();
+    if (start == end) {
+      this.delete(1);
+    } else {
+      this.buf = this.buf.slice(0, start) + this.buf.slice(end);
+    }
+
+    return true;
+  }
 }

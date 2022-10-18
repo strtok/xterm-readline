@@ -124,6 +124,12 @@ export class State {
     }
   }
 
+  public editDeleteEndOfLine() {
+    if (this.line.deleteEndOfLine()) {
+      this.refresh();
+    }
+  }
+
   public refresh() {
     const newLayout = this.tty.computeLayout(this.promptSize, this.line);
     this.tty.refreshLine(
