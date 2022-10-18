@@ -1,3 +1,7 @@
+## [1.1.0] - 2022-10-18
+### Changed
+- Added support for ctrl-k [#4]
+
 ## [1.0.7] - 2022-04-10
 ### Changed
 - Fixed a bug where a lookbehind regex was used, which breaks on browsers that lack support for lookbehind (e.g. Safari).
