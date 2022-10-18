@@ -45,3 +45,30 @@ test("backspace", () => {
     expect(line.buffer()).toBe("fo");
   }
 });
+
+
+test("deleteEndOfLine", () => {
+  {
+    const line = new LineBuffer();
+    line.insert("foobar");
+    expect(line.moveBack(3)).toBeTruthy();
+    expect(line.buffer()).toBe("foobar");
+    expect(line.deleteEndOfLine()).toBeTruthy();
+    expect(line.buffer()).toBe("foo");
+  }
+
+  {
+    const line = new LineBuffer();
+    line.insert("foo\nbar");
+
+    expect(line.moveLineUp(1)).toBeTruthy();
+    expect(line.buffer()).toBe("foo\nbar");
+    expect(line.moveBack(2)).toBeTruthy();
+    expect(line.deleteEndOfLine()).toBeTruthy();
+    expect(line.buffer()).toBe("f\nbar");
+
+    expect(line.moveLineDown(1)).toBeTruthy();
+    expect(line.deleteEndOfLine()).toBeTruthy();
+    expect(line.buffer()).toBe("f\nb");
+  }
+});
