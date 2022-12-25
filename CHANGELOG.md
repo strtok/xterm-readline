@@ -1,3 +1,7 @@
+## [1.1.0] - 2022-12-25
+### Changed
+- Support xterm.js 5.0.0
+
 ## [1.1.0] - 2022-10-18
 ### Changed
 - Added support for ctrl-k [#4]
