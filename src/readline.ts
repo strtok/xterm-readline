@@ -1,4 +1,4 @@
-import { Terminal, ITerminalAddon, IDisposable } from "xterm";
+import { Terminal, ITerminalAddon, IDisposable } from "@xterm/xterm";
 import { Input, InputType, parseInput } from "./keymap";
 import { State } from "./state";
 import { History } from "./history";
