@@ -14,7 +14,7 @@
   "bugs": "https://github.com/strtok/xterm-readline/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/strtok/xterm-readline.git"
+    "url": "git+https://github.com/strtok/xterm-readline.git"
   },
   "main": "lib/readline.js",
   "types": "lib/readline.d.ts",
