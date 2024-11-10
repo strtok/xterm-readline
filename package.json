@@ -24,7 +24,7 @@
     "build": "tsc -p .",
     "build:live": "nodemon --watch 'src/**/*.ts' --exec \"ts-node\" src/readline.ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint .",
     "prepare": "npm run build",
     "preversion": "npm run lint",
     "package": "../../node_modules/.bin/webpack",
