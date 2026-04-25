@@ -1,3 +1,8 @@
+## [1.1.3] - 2026-04-25
+### Changed
+- Widen `@xterm/xterm` peer dependency to `^5.5.0 || ^6.0.0`
+- Bump dev dependencies (typescript-eslint, prettier, nodemon, ts-jest, typescript)
+
 ## [1.1.0] - 2022-12-25
 ### Changed
 - Support xterm.js 5.0.0
