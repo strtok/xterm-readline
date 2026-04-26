@@ -184,6 +184,25 @@ export class Readline implements ITerminalAddon {
   }
 
   /**
+   * Get the current line.
+   *
+   * @returns string - The current line
+   */
+  public getLine() {
+    return this.state.buffer();
+  }
+
+  /**
+   * Update the current line.
+   *
+   * @param text - The text to write to the terminal./
+   * @returns
+   */
+  public updateLine(text: string) {
+    return this.state.update(text);
+  }
+
+  /**
    * Obtain an output interface to this terminal.
    *
    * @returns Output
