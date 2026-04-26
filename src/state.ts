@@ -205,7 +205,7 @@ export class State {
 
   public moveCursorUp(n: number) {
     if (this.editing) {
-      if (this.line.moveLineUp(n)) {
+      if (this.line.moveLineUp(n, this.promptSize.col)) {
         this.moveCursor();
       }
       return;
@@ -215,7 +215,7 @@ export class State {
 
   public moveCursorDown(n: number) {
     if (this.editing) {
-      if (this.line.moveLineDown(n)) {
+      if (this.line.moveLineDown(n, this.promptSize.col)) {
         this.moveCursor();
       }
       return;

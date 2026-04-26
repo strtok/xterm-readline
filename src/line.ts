@@ -96,14 +96,19 @@ export class LineBuffer {
     }
   }
 
-  public moveLineUp(n: number): boolean {
+  public moveLineUp(n: number, promptCols: number = 0): boolean {
     const off = this.buf.slice(0, this.pos).lastIndexOf("\n");
     if (off === -1) {
       return false;
     }
-    const column = [...this.buf.slice(off + 1, this.pos)].length;
+    // Current cursor isn't on buffer line 0 (we just confirmed there's
+    // a `\n` before pos), so its buffer column equals its visual column
+    // for the purposes of vertical alignment.
+    const visualCol = [...this.buf.slice(off + 1, this.pos)].length;
+
     let destStart = this.buf.slice(0, off).lastIndexOf("\n");
-    if (destStart === -1) {
+    let destIsLine0 = destStart === -1;
+    if (destIsLine0) {
       destStart = 0;
     } else {
       destStart = destStart + 1;
@@ -116,14 +121,23 @@ export class LineBuffer {
       }
       destEnd = destStart - 1;
       destStart = this.buf.slice(0, destEnd).lastIndexOf("\n");
-      if (destStart === -1) {
+      destIsLine0 = destStart === -1;
+      if (destIsLine0) {
         destStart = 0;
       } else {
         destStart = destStart + 1;
       }
     }
 
-    const slice = [...this.buf.slice(destStart, destEnd)].slice(0, column);
+    // Line 0 has the prompt rendered before it, so its buffer column N
+    // sits at visual column N + promptCols. To land on the same visual
+    // column we started at, subtract promptCols when the destination is
+    // line 0.
+    const destBufCol = destIsLine0
+      ? Math.max(0, visualCol - promptCols)
+      : visualCol;
+
+    const slice = [...this.buf.slice(destStart, destEnd)].slice(0, destBufCol);
 
     let gIdx = off;
     if (slice.length > 0) {
@@ -134,20 +148,25 @@ export class LineBuffer {
     return true;
   }
 
-  public moveLineDown(n: number): boolean {
+  public moveLineDown(n: number, promptCols: number = 0): boolean {
     const off = this.buf.slice(this.pos).indexOf("\n");
     if (off === -1) {
       return false;
     }
 
     let lineStart = this.buf.slice(0, this.pos).lastIndexOf("\n");
-    if (lineStart === -1) {
+    const currentIsLine0 = lineStart === -1;
+    if (currentIsLine0) {
       lineStart = 0;
     } else {
       lineStart += 1;
     }
 
     const column = [...this.buf.slice(lineStart, this.pos)].length;
+    // The cursor's visual column. Buffer line 0 is rendered after the
+    // prompt, so its visual column is column + promptCols; any other
+    // line starts at visual column 0.
+    const visualCol = currentIsLine0 ? column + promptCols : column;
     let destStart = this.pos + off + 1;
 
     let destEnd = this.buf.slice(destStart).indexOf("\n");
@@ -170,11 +189,13 @@ export class LineBuffer {
       }
     }
 
+    // Destination is below the current line, so it can't be line 0.
+    // Its buffer column equals its visual column.
     const slice = [...this.buf.slice(destStart, destEnd)];
-    if (column < slice.length) {
+    if (visualCol < slice.length) {
       this.pos =
         slice
-          .slice(0, column)
+          .slice(0, visualCol)
           .map((c) => c.length)
           .reduce((acc, m) => acc + m, 0) + destStart;
     } else {

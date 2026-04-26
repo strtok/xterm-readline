@@ -69,16 +69,19 @@ test("edit insert wrap", () => {
   out.write.mockClear();
   state.editInsert("e");
   expect(state.buffer()).toBe("abcde");
-  // New windowed renderer: erase from anchor down with \x1b[J, emit each
-  // visual row separated by \r\n with an SGR reset at row end, then position
-  // cursor at the new (row,col) within the viewport.
-  expect(out.write).toHaveBeenNthCalledWith(1, "\r\x1B[J");
-  expect(out.write).toHaveBeenNthCalledWith(2, "> abc");
-  expect(out.write).toHaveBeenNthCalledWith(3, "\x1B[0m");
-  expect(out.write).toHaveBeenNthCalledWith(4, "\r\n");
-  expect(out.write).toHaveBeenNthCalledWith(5, "de");
-  expect(out.write).toHaveBeenNthCalledWith(6, "\x1B[0m");
-  expect(out.write).toHaveBeenNthCalledWith(7, "\r\x1B[2C");
+  // New windowed renderer: hide cursor for the duration of refresh, erase
+  // from anchor down with \x1b[J, emit each visual row separated by \r\n
+  // with an SGR reset at row end, position cursor at the new (row,col)
+  // within the viewport, then show cursor.
+  expect(out.write).toHaveBeenNthCalledWith(1, "\x1B[?25l");
+  expect(out.write).toHaveBeenNthCalledWith(2, "\r\x1B[J");
+  expect(out.write).toHaveBeenNthCalledWith(3, "> abc");
+  expect(out.write).toHaveBeenNthCalledWith(4, "\x1B[0m");
+  expect(out.write).toHaveBeenNthCalledWith(5, "\r\n");
+  expect(out.write).toHaveBeenNthCalledWith(6, "de");
+  expect(out.write).toHaveBeenNthCalledWith(7, "\x1B[0m");
+  expect(out.write).toHaveBeenNthCalledWith(8, "\r\x1B[2C");
+  expect(out.write).toHaveBeenNthCalledWith(9, "\x1B[?25h");
 });
 
 test("edit multiline backcursor", () => {
@@ -168,10 +171,11 @@ test("single-viewport behavior unchanged for short buffers", () => {
   // scrollOffset stays 0
   expect(out.write).toHaveBeenCalled();
   // Cursor is on virtual row 2 col 1; viewportRows=24, so window covers all.
-  // No \x1b[A produced for moving up to anchor (we were at row 0 before
-  // refresh) — the refresh starts with \r\x1b[J.
+  // The refresh wraps in cursor hide/show; the inner sequence starts with
+  // \r\x1b[J (no \x1b[A move-up needed since we were already at the anchor).
   const calls = out.write.mock.calls.map((c) => c[0]);
-  expect(calls[0]).toBe("\r\x1b[J");
+  expect(calls[0]).toBe("\x1b[?25l");
+  expect(calls[1]).toBe("\r\x1b[J");
 });
 
 test("cursor arrow movement", () => {

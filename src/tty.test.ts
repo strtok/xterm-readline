@@ -1,4 +1,6 @@
-import { Position } from "./state";
+import { IdentityHighlighter } from "./highlight";
+import { LineBuffer } from "./line";
+import { Layout, Position } from "./state";
 import { Tty } from "./tty";
 
 class Output {
@@ -78,4 +80,22 @@ test("calculate position", () => {
   );
 
   expect(tty.calculatePosition("foo\nbar", orig)).toEqual(new Position(1, 3));
+});
+
+test("refreshLine wraps emit in cursor-hide/show", () => {
+  const out = new Output();
+  const tty = new Tty(80, 24, 8, out);
+  const line = new LineBuffer();
+  line.update("hello\nworld", 11);
+
+  const oldLayout = new Layout(new Position(0, 0));
+  const newLayout = new Layout(new Position(0, 0));
+  newLayout.cursor = new Position(1, 5);
+  newLayout.end = new Position(1, 5);
+
+  tty.refreshLine("> ", line, oldLayout, newLayout, new IdentityHighlighter());
+
+  const emitted = out.output.join("");
+  expect(emitted.startsWith("\x1b[?25l")).toBe(true);
+  expect(emitted.endsWith("\x1b[?25h")).toBe(true);
 });

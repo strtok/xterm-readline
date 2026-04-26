@@ -32,13 +32,23 @@ export class VTerm implements Output {
       if (c === "\x1b") {
         if (text[i + 1] === "[") {
           let j = i + 2;
+          // Skip optional private-mode prefix (e.g. ? in \x1b[?25l).
+          // We don't model cursor visibility, so treat the whole
+          // private-mode sequence as a no-op.
+          let isPrivate = false;
+          if (text[j] === "?") {
+            isPrivate = true;
+            j++;
+          }
           let params = "";
           while (j < text.length && /[0-9;]/.test(text[j])) {
             params += text[j];
             j++;
           }
           const final = text[j];
-          if (final !== undefined) this.handleCSI(params, final);
+          if (final !== undefined && !isPrivate) {
+            this.handleCSI(params, final);
+          }
           i = j + 1;
         } else {
           // Unknown escape — skip the ESC.

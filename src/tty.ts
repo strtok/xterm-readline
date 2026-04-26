@@ -194,6 +194,26 @@ export class Tty {
     newLayout: Layout,
     highlighter: Highlighter
   ) {
+    // Hide the cursor for the duration of the refresh sequence. The
+    // intermediate cursor-up / row-rewrite / cursor-down steps below
+    // would otherwise render the cursor briefly at the buffer's anchor
+    // row on every redraw, which appears as a phantom flash on the
+    // line above when the buffer spans multiple lines.
+    this.write("\x1b[?25l");
+    try {
+      this.refreshLineInner(prompt, line, oldLayout, newLayout, highlighter);
+    } finally {
+      this.write("\x1b[?25h");
+    }
+  }
+
+  private refreshLineInner(
+    prompt: string,
+    line: LineBuffer,
+    oldLayout: Layout,
+    newLayout: Layout,
+    highlighter: Highlighter
+  ) {
     const oldScroll = oldLayout.scrollOffset ?? 0;
     const newScroll = newLayout.scrollOffset ?? 0;
 

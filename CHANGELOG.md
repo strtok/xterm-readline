@@ -1,3 +1,15 @@
+## [1.2.2] - 2026-04-26
+### Fixed
+- Phantom cursor flash on the line above when refreshing a multi-line
+  buffer. `Tty.refreshLine` now wraps its emit in cursor hide/show
+  (`\x1b[?25l` / `\x1b[?25h`) so the intermediate cursor-up / row-rewrite
+  / cursor-down sequence isn't visible.
+- Vertical cursor movement (Up/Down) between buffer line 0 and line 1
+  ignored the prompt prefix on line 0, so the cursor jumped by
+  `promptSize.col` columns when crossing that boundary. `LineBuffer.moveLineUp`
+  and `moveLineDown` now take a `promptCols` argument and adjust on
+  line-0 transitions.
+
 ## [1.2.1] - 2026-04-26
 ### Fixed
 - Highlighted brackets (or any cursor-driven SGR) no longer stay frozen
