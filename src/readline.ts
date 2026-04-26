@@ -329,6 +329,9 @@ export class Readline implements ITerminalAddon {
       case InputType.Enter:
         if (this.checkHandler(this.state.buffer())) {
           this.state.moveCursorToEnd();
+          // Strip any cursor-driven highlight (e.g. matching brackets)
+          // before committing so the line frozen in scrollback is plain.
+          this.state.refreshUnhighlighted();
           this.term?.write("\r\n");
           this.history.append(this.state.buffer());
           this.activeRead?.resolve(this.state.buffer());

@@ -3,7 +3,7 @@ import { LineBuffer } from "./line";
 import { Tty } from "./tty";
 import { History } from "./history";
 import stringWidth from "string-width";
-import { Highlighter } from "./highlight";
+import { Highlighter, IdentityHighlighter } from "./highlight";
 
 export class Position {
   public col: number;
@@ -162,6 +162,20 @@ export class State {
       this.highlighter
     );
     this.layout = newLayout;
+  }
+
+  // Re-render the current line with no highlighter applied. Intended
+  // for commit-time redraws (e.g. on Enter) so the line that ends up
+  // in scrollback doesn't have any cursor-driven highlight (e.g. a
+  // matching-bracket SGR) baked into it.
+  public refreshUnhighlighted() {
+    const prev = this.highlighter;
+    this.highlighter = new IdentityHighlighter();
+    try {
+      this.refresh();
+    } finally {
+      this.highlighter = prev;
+    }
   }
 
   private adjustScroll(cursorRow: number, prevOffset: number): number {

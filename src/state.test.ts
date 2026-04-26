@@ -193,3 +193,40 @@ test("cursor arrow movement", () => {
   state.editInsert("y");
   expect(state.buffer()).toEqual("abc\ndezf\nghiy");
 });
+
+class BracketHighlighter {
+  highlight(line: string, _pos: number): string {
+    // Wrap every '(' in a fake SGR so the test can detect highlighting.
+    return line.replace(/\(/g, "\x1b[1;33m(\x1b[0m");
+  }
+  highlightPrompt(prompt: string): string {
+    return prompt;
+  }
+  highlightChar(_line: string, _pos: number): boolean {
+    return false;
+  }
+}
+
+test("refreshUnhighlighted strips highlighter SGR", () => {
+  const out = new Output();
+  const tty = new Tty(80, 24, 8, out);
+  const state = new State(PROMPT, tty, new BracketHighlighter(), new History(50));
+  state.editInsert("(foo)");
+
+  // Sanity: a normal refresh emits the highlighted form.
+  out.output.length = 0;
+  state.refresh();
+  expect(out.output.join("")).toContain("\x1b[1;33m(\x1b[0m");
+
+  // refreshUnhighlighted writes the plain buffer.
+  out.output.length = 0;
+  state.refreshUnhighlighted();
+  const written = out.output.join("");
+  expect(written).toContain("(foo)");
+  expect(written).not.toContain("\x1b[1;33m");
+
+  // The highlighter is restored after the unhighlighted refresh.
+  out.output.length = 0;
+  state.refresh();
+  expect(out.output.join("")).toContain("\x1b[1;33m(\x1b[0m");
+});
