@@ -1,3 +1,17 @@
+## [1.2.1] - 2026-04-26
+### Fixed
+- Highlighted brackets (or any cursor-driven SGR) no longer stay frozen
+  in scrollback after pressing Enter. The line is re-rendered through
+  an `IdentityHighlighter` once at commit time. New `State.refreshUnhighlighted()` helper.
+
+## [1.2.0] - 2026-04-25
+### Added
+- Multi-line viewport rendering with bash-style edit/history behavior.
+- Methods to read and update the current line buffer (#13).
+
+### Changed
+- Bump GitHub Actions versions.
+
 ## [1.1.3] - 2026-04-25
 ### Changed
 - Widen `@xterm/xterm` peer dependency to `^5.5.0 || ^6.0.0`
