@@ -13,12 +13,20 @@ export class Tty {
   public tabWidth: number;
   public col: number;
   public row: number;
+  public anchorRow: number;
   private out: Output;
 
-  constructor(col: number, row: number, tabWidth: number, out: Output) {
+  constructor(
+    col: number,
+    row: number,
+    tabWidth: number,
+    out: Output,
+    anchorRow = 0
+  ) {
     this.tabWidth = tabWidth;
     this.col = col;
     this.row = row;
+    this.anchorRow = anchorRow;
     this.out = out;
   }
 
@@ -36,6 +44,10 @@ export class Tty {
 
   public clearScreen() {
     this.out.write("\x1b[H\x1b[2J");
+  }
+
+  public viewportRows(): number {
+    return Math.max(this.row - this.anchorRow, 1);
   }
 
   // Calculate the number of colums and rows required to print
@@ -84,14 +96,97 @@ export class Tty {
       pos === line.buf.length
         ? { ...cursor }
         : this.calculatePosition(line.buf.slice(pos), cursor);
-    const newLayout = {
+    const newLayout: Layout = {
       promptSize: newPromptSize,
       cursor,
       end,
+      scrollOffset: 0,
     };
     return newLayout;
   }
 
+  // Split highlighted text into visual rows respecting wrap at this.col,
+  // re-applying any active SGR escape sequence at the start of each new row.
+  public splitIntoVisualRows(text: string): string[] {
+    const rows: string[] = [];
+    let currentRow = "";
+    let col = 0;
+    let escSeq = 0;
+    let activeSgr = "";
+    let pendingEsc = "";
+
+    const finishEsc = () => {
+      if (pendingEsc.endsWith("m")) {
+        if (
+          pendingEsc === "\x1b[0m" ||
+          pendingEsc === "\x1b[m" ||
+          /^\x1b\[0(?:;0)*m$/.test(pendingEsc)
+        ) {
+          activeSgr = "";
+        } else {
+          activeSgr = pendingEsc;
+        }
+      }
+      pendingEsc = "";
+    };
+
+    for (const c of [...text]) {
+      // Inside an active escape sequence: append to row, track terminator.
+      if (escSeq !== 0) {
+        currentRow += c;
+        pendingEsc += c;
+        const [, next] = width(c, escSeq);
+        escSeq = next;
+        if (escSeq === 0) finishEsc();
+        continue;
+      }
+
+      if (c === "\x1b") {
+        currentRow += c;
+        pendingEsc = c;
+        const [, next] = width(c, 0);
+        escSeq = next;
+        if (escSeq === 0) finishEsc();
+        continue;
+      }
+
+      if (c === "\n") {
+        rows.push(currentRow);
+        currentRow = activeSgr;
+        col = 0;
+        continue;
+      }
+
+      let cw = 0;
+      if (c === "\t") {
+        cw = this.tabWidth - (col % this.tabWidth);
+      } else {
+        cw = stringWidth(c);
+      }
+
+      if (col + cw > this.col) {
+        rows.push(currentRow);
+        currentRow = activeSgr + c;
+        col = cw;
+      } else {
+        currentRow += c;
+        col += cw;
+      }
+    }
+
+    rows.push(currentRow);
+    // If the buffer ends exactly at the right margin, calculatePosition
+    // normalizes the end to (row+1, 0). Mirror that here so the row count
+    // matches Layout.end.row — otherwise cursor positioning lands one row
+    // short and any subsequent incremental moves drift.
+    if (col === this.col && col > 0) {
+      rows.push(activeSgr);
+    }
+    return rows;
+  }
+
+  // Render the layout in a window of viewportRows() rows starting at anchorRow.
+  // Only rows in [scrollOffset, scrollOffset + viewportRows) are emitted.
   public refreshLine(
     prompt: string,
     line: LineBuffer,
@@ -99,43 +194,86 @@ export class Tty {
     newLayout: Layout,
     highlighter: Highlighter
   ) {
-    const cursor = newLayout.cursor;
-    const endPos = newLayout.end;
-    this.clearOldRows(oldLayout);
+    const oldScroll = oldLayout.scrollOffset ?? 0;
+    const newScroll = newLayout.scrollOffset ?? 0;
 
-    this.write(highlighter.highlightPrompt(prompt));
-    this.write(highlighter.highlight(line.buf, line.pos));
+    // Step 0: build the full highlighted text and split into visual rows so we
+    // know the buffer height before deciding whether to scroll the terminal.
+    const highlighted =
+      highlighter.highlightPrompt(prompt) +
+      highlighter.highlight(line.buf, line.pos);
+    const allRows = this.splitIntoVisualRows(highlighted);
 
-    if (
-      endPos.col === 0 &&
-      endPos.row > 0 &&
-      line.buf[line.buf.length - 1] !== "\n"
-    ) {
-      this.write("\n");
+    // Step 1: where is the physical cursor right now? After the previous
+    // refresh it ended at (anchor + oldCursorViewportRow, oldCursor.col).
+    const oldCursorViewportRow = Math.max(oldLayout.cursor.row - oldScroll, 0);
+    let physicalRow = this.anchorRow + oldCursorViewportRow;
+
+    // Step 2: if the buffer needs more rows than fit below the anchor, scroll
+    // the terminal up by writing \n at the last row. This pulls anchorRow
+    // toward 0 (and lets the prompt scroll into scrollback for very tall
+    // buffers, matching bash's behavior on history recall of a tall command).
+    const desiredVisible = Math.min(allRows.length, this.row);
+    const currentBelowAnchor = this.row - this.anchorRow;
+    if (desiredVisible > currentBelowAnchor && this.anchorRow > 0) {
+      const scrollUp = Math.min(
+        desiredVisible - currentBelowAnchor,
+        this.anchorRow
+      );
+      const downBy = this.row - 1 - physicalRow;
+      if (downBy > 0) this.write(`\x1b[${downBy}B`);
+      this.write("\n".repeat(scrollUp));
+      this.anchorRow -= scrollUp;
+      physicalRow = this.row - 1;
     }
 
-    const newCursorRowMovement = endPos.row - cursor.row;
-    if (newCursorRowMovement > 0) {
-      this.write(`\x1b[${newCursorRowMovement}A`);
+    // Step 3: move physical cursor up to anchorRow.
+    const upToAnchor = physicalRow - this.anchorRow;
+    if (upToAnchor > 0) this.write(`\x1b[${upToAnchor}A`);
+
+    // Step 4: move to col 0 and erase from cursor down.
+    this.write("\r\x1b[J");
+
+    // Step 5: re-clamp scrollOffset against the (possibly enlarged) viewport.
+    // State computed scrollOffset with the pre-scroll viewport; if the
+    // anchor just dropped, the buffer may now fit and scrollOffset can
+    // collapse back to 0.
+    const viewport = this.viewportRows();
+    let effectiveScroll = newScroll;
+    if (newLayout.cursor.row < effectiveScroll) {
+      effectiveScroll = newLayout.cursor.row;
+    } else if (newLayout.cursor.row >= effectiveScroll + viewport) {
+      effectiveScroll = newLayout.cursor.row - viewport + 1;
     }
-    if (cursor.col > 0) {
-      this.write(`\r\x1b[${cursor.col}C`);
+    if (allRows.length <= viewport) effectiveScroll = 0;
+    effectiveScroll = Math.max(
+      0,
+      Math.min(effectiveScroll, allRows.length - viewport)
+    );
+    newLayout.scrollOffset = effectiveScroll;
+    const start = effectiveScroll;
+    const end = Math.min(allRows.length, start + viewport);
+
+    // Step 4: emit visible rows joined by \r\n. Reset SGR between rows so
+    // styles do not leak when the next row starts without an SGR.
+    for (let i = start; i < end; i++) {
+      if (i > start) this.write("\r\n");
+      this.write(allRows[i]);
+      // Reset any active style at end-of-row to avoid bleeding into prompt
+      // re-renders or the gap below the buffer.
+      this.write("\x1b[0m");
+    }
+
+    // Step 6: position cursor at (newCursor.row - effectiveScroll, newCursor.col).
+    const cursorViewportRow = newLayout.cursor.row - effectiveScroll;
+    const lastWrittenViewportRow = end - 1 - start;
+    const upBy = Math.max(lastWrittenViewportRow - cursorViewportRow, 0);
+    if (upBy > 0) this.write(`\x1b[${upBy}A`);
+    if (newLayout.cursor.col > 0) {
+      this.write(`\r\x1b[${newLayout.cursor.col}C`);
     } else {
       this.write("\r");
     }
-  }
-
-  public clearOldRows(layout: Layout) {
-    const currentRow = layout.cursor.row;
-    const oldRows = layout.end.row;
-    const cursorRowMovement = Math.max(oldRows - currentRow, 0);
-    if (cursorRowMovement > 0) {
-      this.write(`\x1b[${cursorRowMovement}B`);
-    }
-    for (let i = 0; i < oldRows; i++) {
-      this.write("\r\x1b[0K\x1b[A");
-    }
-    this.write("\r\x1b[0K");
   }
 
   public moveCursor(oldCursor: Position, newCursor: Position) {

@@ -13,5 +13,6 @@
     "esModuleInterop": true,
     "declaration": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/vterm.ts"]
 }

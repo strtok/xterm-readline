@@ -27,11 +27,13 @@ export class Layout {
   public promptSize: Position;
   public cursor: Position;
   public end: Position;
+  public scrollOffset: number;
 
   constructor(promptSize: Position) {
     this.promptSize = promptSize;
     this.cursor = new Position();
     this.end = new Position();
+    this.scrollOffset = 0;
   }
 }
 
@@ -44,6 +46,11 @@ export class State {
   private highlighter: Highlighter;
   private highlighting = false;
   private history: History;
+  // Bash-style edit-mode lockout: any successful cursor movement or edit
+  // sets editing=true; a buffer replacement via update() (history nav or
+  // Ctrl-U) resets it. Up/Down only navigate history while editing=false;
+  // once editing, Up/Down move within the buffer and no-op at boundaries.
+  private editing = false;
 
   constructor(
     prompt: string,
@@ -61,6 +68,10 @@ export class State {
 
   public buffer(): string {
     return this.line.buffer();
+  }
+
+  public getTty(): Tty {
+    return this.tty;
   }
 
   public shouldHighlight(): boolean {
@@ -81,12 +92,15 @@ export class State {
 
   public clearScreen() {
     this.tty.clearScreen();
+    this.tty.anchorRow = 0;
     this.layout.cursor = new Position();
     this.layout.end = new Position();
+    this.layout.scrollOffset = 0;
     this.refresh();
   }
 
   public editInsert(text: string) {
+    this.editing = true;
     const push = this.line.insert(text);
     const multiline = text.includes("\n");
     if (push && !multiline) {
@@ -109,29 +123,37 @@ export class State {
 
   public update(text: string) {
     this.line.update(text, text.length);
+    this.editing = false;
     this.refresh();
   }
 
   public editBackspace(n: number) {
     if (this.line.backspace(n)) {
+      this.editing = true;
       this.refresh();
     }
   }
 
   public editDelete(n: number) {
     if (this.line.delete(n)) {
+      this.editing = true;
       this.refresh();
     }
   }
 
   public editDeleteEndOfLine() {
     if (this.line.deleteEndOfLine()) {
+      this.editing = true;
       this.refresh();
     }
   }
 
   public refresh() {
     const newLayout = this.tty.computeLayout(this.promptSize, this.line);
+    newLayout.scrollOffset = this.adjustScroll(
+      newLayout.cursor.row,
+      this.layout.scrollOffset
+    );
     this.tty.refreshLine(
       this.prompt,
       this.line,
@@ -142,52 +164,71 @@ export class State {
     this.layout = newLayout;
   }
 
+  private adjustScroll(cursorRow: number, prevOffset: number): number {
+    const viewport = this.tty.viewportRows();
+    if (cursorRow < prevOffset) {
+      return cursorRow;
+    }
+    if (cursorRow >= prevOffset + viewport) {
+      return cursorRow - viewport + 1;
+    }
+    return prevOffset;
+  }
+
   public moveCursorBack(n: number) {
     if (this.line.moveBack(n)) {
+      this.editing = true;
       this.moveCursor();
     }
   }
 
   public moveCursorForward(n: number) {
     if (this.line.moveForward(n)) {
+      this.editing = true;
       this.moveCursor();
     }
   }
 
   public moveCursorUp(n: number) {
-    if (this.line.moveLineUp(n)) {
-      this.moveCursor();
-    } else {
-      this.previousHistory();
+    if (this.editing) {
+      if (this.line.moveLineUp(n)) {
+        this.moveCursor();
+      }
+      return;
     }
+    this.previousHistory();
   }
 
   public moveCursorDown(n: number) {
-    if (this.line.moveLineDown(n)) {
-      this.moveCursor();
-    } else {
-      this.nextHistory();
+    if (this.editing) {
+      if (this.line.moveLineDown(n)) {
+        this.moveCursor();
+      }
+      return;
     }
+    this.nextHistory();
   }
 
   public moveCursorHome() {
     if (this.line.moveHome()) {
+      this.editing = true;
       this.moveCursor();
     }
   }
 
   public moveCursorEnd() {
     if (this.line.moveEnd()) {
+      this.editing = true;
       this.moveCursor();
     }
   }
 
   public moveCursorToEnd() {
-    if (this.layout.cursor === this.layout.end) {
+    if (this.line.pos === this.line.buf.length) {
       return;
     }
-    this.tty.moveCursor(this.layout.cursor, this.layout.end);
-    this.layout.cursor = { ...this.layout.end };
+    this.line.pos = this.line.buf.length;
+    this.refresh();
   }
 
   public previousHistory() {
@@ -220,7 +261,11 @@ export class State {
     if (cursor === this.layout.cursor) {
       return;
     }
-    if (this.shouldHighlight()) {
+    const viewport = this.tty.viewportRows();
+    const inWindow =
+      cursor.row >= this.layout.scrollOffset &&
+      cursor.row < this.layout.scrollOffset + viewport;
+    if (this.shouldHighlight() || !inWindow) {
       this.refresh();
     } else {
       this.tty.moveCursor(this.layout.cursor, cursor);

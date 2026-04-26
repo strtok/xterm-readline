@@ -73,6 +73,16 @@ Alt/Shift Enter | Force add \n to the input
 Ctrl-U          | Clear line
 Ctrl-K          | Delete text from cursor to end of line
 
+# Demo
+
+A small paren-balanced REPL under `demo/` for manual testing. Hot-reloads
+on `src/` edits.
+
+```
+npm install
+npm run demo
+```
+
 # Real World Uses
 
 * [Marwood](https://github.com/strtok/marwood)

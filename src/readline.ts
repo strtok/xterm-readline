@@ -52,7 +52,18 @@ export class Readline implements ITerminalAddon {
    */
   public activate(term: Terminal): void {
     this.term = term;
-    this.term.onData(this.readData.bind(this));
+    this.disposables.push(this.term.onData(this.readData.bind(this)));
+    this.disposables.push(
+      this.term.onResize(({ cols, rows }) => {
+        const tty = this.state.getTty();
+        tty.col = cols;
+        tty.row = rows;
+        if (tty.anchorRow >= rows) tty.anchorRow = Math.max(0, rows - 1);
+        if (this.activeRead !== undefined) {
+          this.state.refresh();
+        }
+      })
+    );
     this.term.attachCustomKeyEventHandler(this.handleKeyEvent.bind(this));
   }
 
@@ -188,11 +199,13 @@ export class Readline implements ITerminalAddon {
    */
   public tty(): Tty {
     if (this.term?.options?.tabStopWidth !== undefined) {
+      const anchor = this.term.buffer.active.cursorY;
       return new Tty(
         this.term.cols,
         this.term.rows,
         this.term.options.tabStopWidth,
-        this.output()
+        this.output(),
+        anchor
       );
     } else {
       return new Tty(0, 0, 8, this.output());
@@ -213,14 +226,21 @@ export class Readline implements ITerminalAddon {
         reject("addon is not active");
         return;
       }
-      this.state = new State(
-        prompt,
-        this.tty(),
-        this.highlighter,
-        this.history
-      );
-      this.state.refresh();
-      this.activeRead = { prompt, resolve, reject };
+      // term.write is buffered, so any prior prints (e.g. an animated logo)
+      // may not have updated buffer.active.cursorY by the time we read it
+      // synchronously. Wait for the buffer to flush so the anchor row
+      // accurately reflects where the prompt will land.
+      this.term.write("", () => {
+        if (this.term === undefined) return;
+        this.state = new State(
+          prompt,
+          this.tty(),
+          this.highlighter,
+          this.history
+        );
+        this.state.refresh();
+        this.activeRead = { prompt, resolve, reject };
+      });
     });
   }
 
