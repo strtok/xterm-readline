@@ -224,7 +224,8 @@ export class Readline implements ITerminalAddon {
         this.term.rows,
         this.term.options.tabStopWidth,
         this.output(),
-        anchor
+        anchor,
+        this.term.buffer.active.cursorX
       );
     } else {
       return new Tty(0, 0, 8, this.output());
@@ -245,11 +246,7 @@ export class Readline implements ITerminalAddon {
         reject("addon is not active");
         return;
       }
-      // term.write is buffered, so any prior prints (e.g. an animated logo)
-      // may not have updated buffer.active.cursorY by the time we read it
-      // synchronously. Wait for the buffer to flush so the anchor row
-      // accurately reflects where the prompt will land.
-      this.term.write("", () => {
+      const startRead = () => {
         if (this.term === undefined) return;
         this.state = new State(
           prompt,
@@ -259,6 +256,18 @@ export class Readline implements ITerminalAddon {
         );
         this.state.refresh();
         this.activeRead = { prompt, resolve, reject };
+      };
+      // Sample both anchor coordinates after prior writes have flushed.
+      this.term.write("", () => {
+        if (this.term === undefined) return;
+        // xterm exposes cursorX === cols while a right-margin wrap is
+        // pending. Resolve it before anchoring so a redraw cannot erase
+        // the final character of the preceding output.
+        if (this.term.buffer.active.cursorX >= this.term.cols) {
+          this.term.write("\r\n", startRead);
+        } else {
+          startRead();
+        }
       });
     });
   }

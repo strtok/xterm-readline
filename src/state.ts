@@ -62,7 +62,7 @@ export class State {
     this.tty = tty;
     this.highlighter = highlighter;
     this.history = history;
-    this.promptSize = tty.calculatePosition(prompt, new Position());
+    this.promptSize = tty.calculatePosition(prompt, new Position(0, tty.anchorCol));
     this.layout = new Layout(this.promptSize);
   }
 
@@ -93,6 +93,7 @@ export class State {
   public clearScreen() {
     this.tty.clearScreen();
     this.tty.anchorRow = 0;
+    this.tty.anchorCol = 0;
     this.layout.cursor = new Position();
     this.layout.end = new Position();
     this.layout.scrollOffset = 0;
@@ -149,6 +150,10 @@ export class State {
   }
 
   public refresh() {
+    this.promptSize = this.tty.calculatePosition(
+      this.prompt,
+      new Position(0, this.tty.anchorCol)
+    );
     const newLayout = this.tty.computeLayout(this.promptSize, this.line);
     newLayout.scrollOffset = this.adjustScroll(
       newLayout.cursor.row,

@@ -14,6 +14,8 @@ export class Tty {
   public col: number;
   public row: number;
   public anchorRow: number;
+  // Terminal column where the first prompt row begins; later rows start at 0.
+  public anchorCol: number;
   private out: Output;
 
   constructor(
@@ -21,12 +23,14 @@ export class Tty {
     row: number,
     tabWidth: number,
     out: Output,
-    anchorRow = 0
+    anchorRow = 0,
+    anchorCol = 0
   ) {
     this.tabWidth = tabWidth;
     this.col = col;
     this.row = row;
     this.anchorRow = anchorRow;
+    this.anchorCol = anchorCol;
     this.out = out;
   }
 
@@ -107,10 +111,10 @@ export class Tty {
 
   // Split highlighted text into visual rows respecting wrap at this.col,
   // re-applying any active SGR escape sequence at the start of each new row.
-  public splitIntoVisualRows(text: string): string[] {
+  public splitIntoVisualRows(text: string, startCol = 0): string[] {
     const rows: string[] = [];
     let currentRow = "";
-    let col = 0;
+    let col = startCol;
     let escSeq = 0;
     let activeSgr = "";
     let pendingEsc = "";
@@ -222,7 +226,7 @@ export class Tty {
     const highlighted =
       highlighter.highlightPrompt(prompt) +
       highlighter.highlight(line.buf, line.pos);
-    const allRows = this.splitIntoVisualRows(highlighted);
+    const allRows = this.splitIntoVisualRows(highlighted, this.anchorCol);
 
     // Step 1: where is the physical cursor right now? After the previous
     // refresh it ended at (anchor + oldCursorViewportRow, oldCursor.col).
@@ -251,10 +255,7 @@ export class Tty {
     const upToAnchor = physicalRow - this.anchorRow;
     if (upToAnchor > 0) this.write(`\x1b[${upToAnchor}A`);
 
-    // Step 4: move to col 0 and erase from cursor down.
-    this.write("\r\x1b[J");
-
-    // Step 5: re-clamp scrollOffset against the (possibly enlarged) viewport.
+    // Step 4: re-clamp scrollOffset against the (possibly enlarged) viewport.
     // State computed scrollOffset with the pre-scroll viewport; if the
     // anchor just dropped, the buffer may now fit and scrollOffset can
     // collapse back to 0.
@@ -274,7 +275,11 @@ export class Tty {
     const start = effectiveScroll;
     const end = Math.min(allRows.length, start + viewport);
 
-    // Step 4: emit visible rows joined by \r\n. Reset SGR between rows so
+    // Preserve output preceding the prompt on its first visual row.
+    const firstCol = start === 0 ? this.anchorCol : 0;
+    this.write(`\r${firstCol > 0 ? `\x1b[${firstCol}C` : ""}\x1b[J`);
+
+    // Step 5: emit visible rows joined by \r\n. Reset SGR between rows so
     // styles do not leak when the next row starts without an SGR.
     for (let i = start; i < end; i++) {
       if (i > start) this.write("\r\n");
