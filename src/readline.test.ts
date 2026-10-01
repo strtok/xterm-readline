@@ -15,6 +15,9 @@ class StubTerminal {
       get cursorY() {
         return this.parent.vt.cursor()[0];
       },
+      get cursorX() {
+        return this.parent.vt.cursor()[1];
+      },
       parent: null as unknown as StubTerminal,
     },
   };
@@ -103,6 +106,58 @@ test("typing through onData drives State and updates the screen", async () => {
   term.feedData("\r"); // Enter
   expect(await promise).toBe("hello");
 });
+
+test("read preserves prior output through editing and submission", async () => {
+  const term = new StubTerminal(20, 6);
+  const rl = new Readline();
+  rl.activate(term as unknown as Parameters<typeof rl.activate>[0]);
+  term.write("banner\r\nHello ");
+  const promise = rl.read("> ");
+  expect(term.vt.screen()).toBe("banner\nHello >");
+  expect(term.vt.cursor()).toEqual([1, 8]);
+  term.feedData("abc");
+  term.feedData("\x7f");
+  expect(term.vt.screen()).toBe("banner\nHello > ab");
+  term.feedData("\x1b[D");
+  term.feedData("X");
+  expect(term.vt.screen()).toBe("banner\nHello > aXb");
+  term.feedData("\r");
+  expect(await promise).toBe("aXb");
+  expect(term.vt.screen()).toBe("banner\nHello > aXb");
+});
+
+test("read wraps at the remaining first-row width and clears shortened input", () => {
+  const term = new StubTerminal(10, 6);
+  const rl = new Readline();
+  rl.activate(term as unknown as Parameters<typeof rl.activate>[0]);
+  term.write("Hello ");
+  rl.read("> ");
+  term.feedData("abc");
+  expect(term.vt.screen()).toBe("Hello > ab\nc");
+  expect(term.vt.cursor()).toEqual([1, 1]);
+  term.feedData("\x7f");
+  expect(term.vt.screen()).toBe("Hello > ab");
+  expect(term.vt.cursor()).toEqual([1, 0]);
+  term.feedData("\x7f");
+  expect(term.vt.screen()).toBe("Hello > a");
+  expect(term.vt.cursor()).toEqual([0, 9]);
+  term.feedData("\x15");
+  expect(term.vt.screen()).toBe("Hello >");
+  expect(term.vt.cursor()).toEqual([0, 8]);
+});
+
+test("Ctrl-L resets the prompt's starting column", () => {
+  const term = new StubTerminal(20, 6);
+  const rl = new Readline();
+  rl.activate(term as unknown as Parameters<typeof rl.activate>[0]);
+  term.write("Hello ");
+  rl.read("> ");
+  term.feedData("abc");
+  term.feedData("\x0c");
+  expect(term.vt.screen()).toBe("> abc");
+  expect(term.vt.cursor()).toEqual([0, 5]);
+});
+
 
 test("onResize re-fits Tty and re-renders the active read", () => {
   const term = new StubTerminal(40, 8);

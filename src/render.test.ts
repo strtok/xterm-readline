@@ -19,6 +19,7 @@ function setup(
     anchor?: number;
     highlighter?: Highlighter;
     history?: string[];
+    prefix?: string;
   } = {}
 ) {
   const vt = new VTerm(cols, rows);
@@ -28,7 +29,8 @@ function setup(
   if (opts.anchor && opts.anchor > 0) {
     vt.write("\n".repeat(opts.anchor));
   }
-  const tty = new Tty(cols, rows, 8, vt, opts.anchor ?? 0);
+  vt.write(opts.prefix ?? "");
+  const tty = new Tty(cols, rows, 8, vt, opts.anchor ?? 0, vt.cursor()[1]);
   const history = new History(50);
   for (const e of opts.history ?? []) history.append(e);
   const state = new State(
@@ -46,6 +48,40 @@ test("typed single-line input renders prompt + text", () => {
   state.editInsert("abc");
   expect(vt.screen()).toBe("> abc");
   expect(vt.cursor()).toEqual([0, 5]);
+});
+
+test("multiline prompt and history preserve output before the prompt", () => {
+  const { vt, state } = setup(10, 5, {
+    prefix: "Hello ",
+    prompt: ">\n.. ",
+    history: ["abc\ndef"],
+  });
+  state.previousHistory();
+  expect(vt.screen()).toBe("Hello >\n.. abc\ndef");
+  expect(vt.cursor()).toEqual([2, 3]);
+  state.moveCursorBack(7);
+  state.editInsert("X");
+  expect(vt.screen()).toBe("Hello >\n.. Xabc\ndef");
+});
+
+test("wrapping from a nonzero column scrolls the prefix with its row", () => {
+  const { vt, state } = setup(10, 3, { prefix: "Hello ", anchor: 2 });
+  state.editInsert("abc");
+  expect(vt.screen()).toBe("\nHello > ab\nc");
+  expect(vt.cursor()).toEqual([2, 1]);
+  state.update("");
+  expect(vt.screen()).toBe("\nHello >");
+  expect(vt.cursor()).toEqual([1, 8]);
+});
+
+test("prompt wrapping uses the remaining space on the first row", () => {
+  const { vt, state } = setup(10, 5, { prefix: "12345678", prompt: "abc> " });
+  expect(vt.screen()).toBe("12345678ab\nc>");
+  expect(vt.cursor()).toEqual([1, 3]);
+  state.editInsert("x");
+  state.editBackspace(1);
+  expect(vt.screen()).toBe("12345678ab\nc>");
+  expect(vt.cursor()).toEqual([1, 3]);
 });
 
 test("multi-line insert renders all rows and lands cursor at end", () => {
