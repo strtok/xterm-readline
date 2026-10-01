@@ -32,3 +32,40 @@ test.each(["Hello ", "1234567890"])(
     term.dispose();
   }
 );
+
+// Wait for xterm's buffered writes (and any writes they trigger) to land.
+async function drain(term: Terminal) {
+  for (let i = 0; i < 5; i++) {
+    await new Promise<void>((resolve) => term.write("", resolve));
+  }
+}
+
+function screen(term: Terminal, rows: number): string[] {
+  const buffer = term.buffer.active;
+  return Array.from(
+    { length: rows },
+    (_, i) => buffer.getLine(i)?.translateToString(true) ?? ""
+  );
+}
+
+async function startRead(cols: number, prefix: string, keys: string[]) {
+  const term = new Terminal({ cols, rows: 8 });
+  const rl = new Readline();
+  term.loadAddon(rl);
+  term.write(prefix);
+  rl.read("> ");
+  await drain(term);
+  for (const key of keys) {
+    term.input(key);
+    await drain(term);
+  }
+  return term;
+}
+
+test("Ctrl-C away from the end of the line starts the next prompt at column 0", async () => {
+  const term = await startRead(40, "", ["abcdef", "\x1b[D", "\x1b[D", "\x03"]);
+  expect(screen(term, 2)).toEqual(["> abcdef^C", "> "]);
+  expect(term.buffer.active.cursorY).toBe(1);
+  expect(term.buffer.active.cursorX).toBe(2);
+  term.dispose();
+});

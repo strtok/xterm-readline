@@ -349,17 +349,22 @@ export class Readline implements ITerminalAddon {
           this.state.editInsert("\n");
         }
         break;
-      case InputType.CtrlC:
+      case InputType.CtrlC: {
         this.state.moveCursorToEnd();
         this.term?.write("^C\r\n");
+        // term.write is buffered, so tty() may still sample the abandoned
+        // line's cursor column. The new prompt always starts at column 0.
+        const tty = this.tty();
+        tty.anchorCol = 0;
         this.state = new State(
           this.activeRead.prompt,
-          this.tty(),
+          tty,
           this.highlighter,
           this.history
         );
         this.state.refresh();
         break;
+      }
       case InputType.CtrlS:
         this.pauseHandler(false);
         break;
