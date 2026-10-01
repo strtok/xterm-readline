@@ -1,3 +1,10 @@
+## [1.3.0] - 2026-10-01
+### Added
+- `read()` preserves output already written on the row where the prompt
+  starts, instead of erasing it. The prompt is anchored at the cursor's
+  column (`Tty.anchorCol`) and wraps at the remaining width of that row;
+  later rows still start at column 0 (#16).
+
 ## [1.2.2] - 2026-04-26
 ### Fixed
 - Phantom cursor flash on the line above when refreshing a multi-line
