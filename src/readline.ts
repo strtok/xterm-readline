@@ -1,4 +1,4 @@
-import { Terminal, ITerminalAddon, IDisposable } from "@xterm/xterm";
+import { Terminal, ITerminalAddon, IDisposable, IMarker } from "@xterm/xterm";
 import { Input, InputType, parseInput } from "./keymap";
 import { State } from "./state";
 import { History } from "./history";
@@ -20,6 +20,12 @@ export class Readline implements ITerminalAddon {
   private highlighter: Highlighter = new IdentityHighlighter();
   private history: History = new History(50);
   private activeRead: ActiveRead | undefined;
+  private printingPrompt = false;
+  private pendingKeys: Input[] = [];
+  private promptMarker: IMarker | undefined;
+  private promptStartCol = 0;
+  private promptRows = 0;
+  private resizePending = false;
   private disposables: IDisposable[] = [];
   private watermark = 0;
   private highWatermark = 10000;
@@ -60,7 +66,11 @@ export class Readline implements ITerminalAddon {
         tty.row = rows;
         if (tty.anchorRow >= rows) tty.anchorRow = Math.max(0, rows - 1);
         if (this.activeRead !== undefined) {
-          this.state.refresh();
+          if (this.printingPrompt) {
+            this.resizePending = true;
+          } else {
+            this.redrawPrompt();
+          }
         }
       })
     );
@@ -72,6 +82,7 @@ export class Readline implements ITerminalAddon {
    *
    */
   public dispose(): void {
+    this.promptMarker?.dispose();
     this.disposables.forEach((d) => d.dispose());
   }
 
@@ -246,30 +257,81 @@ export class Readline implements ITerminalAddon {
         reject("addon is not active");
         return;
       }
-      const startRead = () => {
-        if (this.term === undefined) return;
+      this.activeRead = { prompt, resolve, reject };
+      this.printPrompt(prompt, (tty) => {
         this.state = new State(
           prompt,
-          this.tty(),
+          tty,
           this.highlighter,
-          this.history
+          this.history,
+          () => this.redrawPrompt()
         );
         this.state.refresh();
-        this.activeRead = { prompt, resolve, reject };
-      };
-      // Sample both anchor coordinates after prior writes have flushed.
-      this.term.write("", () => {
-        if (this.term === undefined) return;
-        // xterm exposes cursorX === cols while a right-margin wrap is
-        // pending. Resolve it before anchoring so a redraw cannot erase
-        // the final character of the preceding output.
-        if (this.term.buffer.active.cursorX >= this.term.cols) {
-          this.term.write("\r\n", startRead);
-        } else {
-          startRead();
-        }
       });
     });
+  }
+
+  // Let xterm lay out the prompt, then anchor the editable input at its end.
+  // The prompt itself is no longer part of input redraws.
+  private printPrompt(prompt: string, done: (tty: Tty) => void) {
+    const term = this.term;
+    if (term === undefined) return;
+    this.printingPrompt = true;
+    let startRow = 0;
+    const finish = () => {
+      if (this.term !== term) return;
+      const buffer = term.buffer.active;
+      this.promptRows = (buffer.baseY ?? 0) + buffer.cursorY - startRow;
+      done(this.tty());
+      this.printingPrompt = false;
+      if (this.resizePending) {
+        this.resizePending = false;
+        this.redrawPrompt();
+        return;
+      }
+      const pending = this.pendingKeys;
+      this.pendingKeys = [];
+      for (const key of pending) this.readKey(key);
+    };
+    const emit = () => {
+      const buffer = term.buffer.active;
+      startRow = (buffer.baseY ?? 0) + buffer.cursorY;
+      this.promptStartCol = buffer.cursorX;
+      this.promptMarker?.dispose();
+      this.promptMarker = term.registerMarker?.(0);
+      this.write("\x1b[J" + this.highlighter.highlightPrompt(prompt) + "\x1b[0m");
+      term.write("", () => {
+        // Normalize xterm's pending wrap before sampling the input anchor.
+        if (term.buffer.active.cursorX >= term.cols) {
+          term.write("\r\n", finish);
+        } else {
+          finish();
+        }
+      });
+    };
+    term.write("", () => {
+      if (term.buffer.active.cursorX >= term.cols) {
+        term.write("\r\n", emit);
+      } else {
+        emit();
+      }
+    });
+  }
+
+  private redrawPrompt() {
+    if (this.term === undefined || this.activeRead === undefined) return;
+    const tty = this.state.getTty();
+    const marker = this.promptMarker;
+    const row =
+      marker !== undefined && !marker.isDisposed
+        ? marker.line - (this.term.buffer.active.baseY ?? 0)
+        : tty.anchorRow - this.promptRows;
+    const startRow = Math.max(0, Math.min(this.term.rows - 1, row));
+    const startCol = Math.min(this.promptStartCol, this.term.cols - 1);
+    this.term.write(`\x1b[${startRow + 1};${startCol + 1}H`);
+    this.printPrompt(this.activeRead.prompt, (nextTty) =>
+      this.state.reanchor(nextTty)
+    );
   }
 
   private handleKeyEvent(event: KeyboardEvent): boolean {
@@ -306,15 +368,15 @@ export class Readline implements ITerminalAddon {
     });
 
     for (const it of mappedInput) {
-      if (it.inputType === InputType.Text) {
-        this.state.editInsert(it.data.join(""));
-      } else {
-        this.readKey(it);
-      }
+      this.readKey(it);
     }
   }
 
   private readKey(input: Input) {
+    if (this.printingPrompt) {
+      this.pendingKeys.push(input);
+      return;
+    }
     if (this.activeRead === undefined) {
       switch (input.inputType) {
         case InputType.CtrlC:
@@ -352,17 +414,17 @@ export class Readline implements ITerminalAddon {
       case InputType.CtrlC: {
         this.state.moveCursorToEnd();
         this.term?.write("^C\r\n");
-        // term.write is buffered, so tty() may still sample the abandoned
-        // line's cursor column. The new prompt always starts at column 0.
-        const tty = this.tty();
-        tty.anchorCol = 0;
-        this.state = new State(
-          this.activeRead.prompt,
-          tty,
-          this.highlighter,
-          this.history
-        );
-        this.state.refresh();
+        const prompt = this.activeRead.prompt;
+        this.printPrompt(prompt, (tty) => {
+          this.state = new State(
+            prompt,
+            tty,
+            this.highlighter,
+            this.history,
+            () => this.redrawPrompt()
+          );
+          this.state.refresh();
+        });
         break;
       }
       case InputType.CtrlS:
@@ -378,7 +440,8 @@ export class Readline implements ITerminalAddon {
         this.pauseHandler(true);
         break;
       case InputType.CtrlL:
-        this.state.clearScreen();
+        this.term?.write("\x1b[H\x1b[2J");
+        this.printPrompt(this.activeRead.prompt, (tty) => this.state.reanchor(tty));
         break;
       case InputType.Home:
       case InputType.CtrlA:
