@@ -1,3 +1,13 @@
+## [1.3.1] - 2026-10-04
+### Fixed
+- Prompts containing characters whose width xterm measures differently
+  (e.g. emoji such as `🚀`) no longer leave a gap before the input or
+  shift it left after Backspace. The prompt is now rendered by xterm and
+  the input is anchored at the measured cursor position; the prompt is
+  reprinted and remeasured on resize, Ctrl-L, Ctrl-C, and when returning
+  from a clipped input window. Keys typed while the prompt is being
+  measured are queued (#17).
+
 ## [1.3.0] - 2026-10-01
 ### Added
 - `read()` preserves output already written on the row where the prompt
