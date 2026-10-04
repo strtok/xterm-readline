@@ -58,6 +58,13 @@ export class Readline implements ITerminalAddon {
    */
   public activate(term: Terminal): void {
     this.term = term;
+    // A prompt print in flight on a previous terminal never finishes for this
+    // one; drop its bookkeeping so input is not queued forever.
+    this.printingPrompt = false;
+    this.pendingKeys = [];
+    this.resizePending = false;
+    this.promptMarker?.dispose();
+    this.promptMarker = undefined;
     this.disposables.push(this.term.onData(this.readData.bind(this)));
     this.disposables.push(
       this.term.onResize(({ cols, rows }) => {
@@ -318,8 +325,9 @@ export class Readline implements ITerminalAddon {
     });
   }
 
-  private redrawPrompt() {
-    if (this.term === undefined || this.activeRead === undefined) return;
+  // Returns false when there is no active read to redraw a prompt for.
+  private redrawPrompt(): boolean {
+    if (this.term === undefined || this.activeRead === undefined) return false;
     const tty = this.state.getTty();
     const marker = this.promptMarker;
     const row =
@@ -332,6 +340,7 @@ export class Readline implements ITerminalAddon {
     this.printPrompt(this.activeRead.prompt, (nextTty) =>
       this.state.reanchor(nextTty)
     );
+    return true;
   }
 
   private handleKeyEvent(event: KeyboardEvent): boolean {

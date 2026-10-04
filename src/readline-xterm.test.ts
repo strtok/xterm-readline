@@ -8,6 +8,9 @@ beforeEach(() => {
   jest
     .spyOn(History.prototype, "restoreFromLocalStorage")
     .mockImplementation(() => {});
+  jest
+    .spyOn(History.prototype, "saveToLocalStorage")
+    .mockImplementation(() => {});
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -45,6 +48,14 @@ function screen(term: Terminal, rows: number): string[] {
   return Array.from(
     { length: rows },
     (_, i) => buffer.getLine(i)?.translateToString(true) ?? ""
+  );
+}
+
+function viewport(term: Terminal): string[] {
+  const buffer = term.buffer.active;
+  return Array.from(
+    { length: term.rows },
+    (_, i) => buffer.getLine(buffer.viewportY + i)?.translateToString(true) ?? ""
   );
 }
 
@@ -181,11 +192,54 @@ test("returning from a clipped input window restores the measured prompt", async
   term.loadAddon(rl);
   rl.read("example terminal: 🚀>");
   await drain(term);
-  term.input("a\nb\nc\nd");
+  // A pasted carriage return is inserted as a newline, so five input rows
+  // overflow the three-row viewport and clip the prompt row.
+  term.input("a\rb\rc\rd\re");
   await drain(term);
+  expect(rl.getLine()).toBe("a\nb\nc\nd\ne");
+  expect(viewport(term)).toEqual(["c", "d", "e"]);
   term.input("\x15");
   await drain(term);
-  expect(screen(term, 3)).toEqual(["example terminal: 🚀>", "", ""]);
+  expect(viewport(term)).toEqual(["example terminal: 🚀>", "", ""]);
   expect(term.buffer.active.cursorX).toBe(20);
+  term.dispose();
+});
+
+test("re-activating on another terminal mid-prompt does not swallow input", async () => {
+  const first = new Terminal({ cols: 40, rows: 8 });
+  const second = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  first.loadAddon(rl);
+  rl.read("> ");
+  // Move to the second terminal before the first prompt print completes.
+  second.loadAddon(rl);
+  await drain(first);
+  second.input("\x03");
+  await drain(second);
+  expect(screen(second, 2)).toEqual(["> ^C", "> "]);
+  expect(second.buffer.active.cursorX).toBe(2);
+  first.dispose();
+  second.dispose();
+});
+
+test("updateLine after a clipped read completes still redraws the input", async () => {
+  const term = new Terminal({ cols: 30, rows: 3 });
+  const rl = new Readline();
+  term.loadAddon(rl);
+  rl.read("> ");
+  await drain(term);
+  term.input("a\rb\rc\rd\re");
+  await drain(term);
+  term.input("\r");
+  await drain(term);
+  rl.updateLine("x");
+  await drain(term);
+  expect(rl.getLine()).toBe("x");
+  // The finished read's prompt is not reprinted, but the input is drawn and
+  // the cursor follows it rather than staying on a stale layout.
+  const buffer = term.buffer.active;
+  const row = viewport(term)[buffer.cursorY];
+  expect(row.endsWith("x")).toBe(true);
+  expect(buffer.cursorX).toBe(row.length);
   term.dispose();
 });

@@ -57,7 +57,7 @@ export class State {
     tty: Tty,
     highlighter: Highlighter,
     history: History,
-    private restorePrompt?: () => void
+    private restorePrompt?: () => boolean
   ) {
     this.prompt = restorePrompt ? "" : prompt;
     this.tty = tty;
@@ -177,13 +177,14 @@ export class State {
       this.layout.scrollOffset
     );
     // A clipped input window can overwrite the prompt's row. Reprint and
-    // measure it when returning to the start of the input.
+    // measure it when returning to the start of the input. Fall through to a
+    // normal redraw if there is no active read to restore the prompt for.
     if (
       this.restorePrompt &&
       this.layout.scrollOffset > 0 &&
-      (newLayout.scrollOffset === 0 || newLayout.end.row < this.tty.viewportRows())
+      (newLayout.scrollOffset === 0 || newLayout.end.row < this.tty.viewportRows()) &&
+      this.restorePrompt()
     ) {
-      this.restorePrompt();
       return;
     }
     this.tty.refreshLine(
