@@ -56,13 +56,23 @@ export class State {
     prompt: string,
     tty: Tty,
     highlighter: Highlighter,
-    history: History
+    history: History,
+    private restorePrompt?: () => boolean
   ) {
-    this.prompt = prompt;
+    this.prompt = restorePrompt ? "" : prompt;
     this.tty = tty;
-    this.highlighter = highlighter;
+    this.highlighter = restorePrompt
+      ? {
+          highlight: (line, pos) => highlighter.highlight(line, pos),
+          highlightChar: (line, pos) => highlighter.highlightChar(line, pos),
+          highlightPrompt: () => "",
+        }
+      : highlighter;
     this.history = history;
-    this.promptSize = tty.calculatePosition(prompt, new Position(0, tty.anchorCol));
+    this.promptSize = tty.calculatePosition(
+      this.prompt,
+      new Position(0, tty.anchorCol)
+    );
     this.layout = new Layout(this.promptSize);
   }
 
@@ -72,6 +82,13 @@ export class State {
 
   public getTty(): Tty {
     return this.tty;
+  }
+
+  // Rebase the existing input after the prompt has been printed again.
+  public reanchor(tty: Tty) {
+    this.tty = tty;
+    this.layout = new Layout(new Position(0, tty.anchorCol));
+    this.refresh();
   }
 
   public shouldHighlight(): boolean {
@@ -159,6 +176,17 @@ export class State {
       newLayout.cursor.row,
       this.layout.scrollOffset
     );
+    // A clipped input window can overwrite the prompt's row. Reprint and
+    // measure it when returning to the start of the input. Fall through to a
+    // normal redraw if there is no active read to restore the prompt for.
+    if (
+      this.restorePrompt &&
+      this.layout.scrollOffset > 0 &&
+      (newLayout.scrollOffset === 0 || newLayout.end.row < this.tty.viewportRows()) &&
+      this.restorePrompt()
+    ) {
+      return;
+    }
     this.tty.refreshLine(
       this.prompt,
       this.line,
