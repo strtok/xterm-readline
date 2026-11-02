@@ -58,42 +58,21 @@ readLine();
 
 # Cancelling a read
 
-Pass an optional `AbortSignal` to cancel a pending read. The caller owns the
-controller; the Ctrl-C handler can use it to abort the read:
+`read()` accepts an optional `AbortSignal`. Aborting it rejects the pending read with `signal.reason`.
 
-```ts
+```typescript
 const controller = new AbortController();
-rl.setCtrlCHandler(() => controller.abort());
-
-try {
-  const input = await rl.read("> ", { signal: controller.signal });
-  // Use input.
-} catch (error) {
-  if (!controller.signal.aborted || error !== controller.signal.reason) {
-    throw error;
-  }
-  // Cancelled. The caller decides whether to start another read.
-}
+rl.read(">", { signal: controller.signal }).then(processLine, () => {});
+controller.abort();
 ```
 
-Aborting rejects with `signal.reason`. Calling `abort()` without a reason uses
-a `DOMException` named `AbortError`; custom reasons are preserved. An already
-aborted signal rejects without printing a prompt. Use a fresh controller for
-each cancellation scope. Only one read can be active at a time; overlapping
-calls reject instead of replacing the pending read.
+During a read with a signal, the Ctrl-C handler is also called, so it can abort the read:
 
-The Ctrl-C handler now runs both during and between reads, including while a
-prompt is being printed. If the handler aborts the read, input is discarded and
-no replacement prompt is printed. Output already written or queued to xterm is
-left intact; cancellation does not add a newline or `^C`. If the handler does
-not abort, Ctrl-C retains its existing behavior: print `^C`, clear input, and
-reprint the prompt while leaving the same read promise pending.
+```typescript
+rl.setCtrlCHandler(() => controller.abort());
+```
 
-A signal can also be aborted by a Cancel button or another application action.
-Cancelling a read does not automatically cancel unrelated work; other operations
-must observe a signal themselves. Registering an aborting Ctrl-C handler affects
-its controller between reads too, so applications should manage that handler's
-lifetime along with the operation it cancels.
+Reads without a signal keep the old behavior: Ctrl-C only clears the line.
 
 # Keyboard Shortcuts
 
@@ -105,7 +84,7 @@ Left            | Move cursor one character left
 Right           | Move cursor one character right
 Up              | Move cursor up (multi-line edit)
 Down            | Move cursor down (multi-line edit)
-Ctrl-C          | Call the registered handler; unless it aborts the read, clear input and reprint the prompt
+Ctrl-C          | Cancel line in progress (additionally call ctrl-c callback if registered)
 Ctrl-D, Del     | Delete the character under the cursor
 Enter           | Apply the line, or begin a new line in multiline mode
 Alt/Shift Enter | Force add \n to the input

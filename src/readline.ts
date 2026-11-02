@@ -9,6 +9,7 @@ interface ActiveRead {
   prompt: string;
   resolve: (input: string) => void;
   reject: (e: unknown) => void;
+  signal?: AbortSignal;
   cleanup?: () => void;
 }
 
@@ -63,15 +64,10 @@ export class Readline implements ITerminalAddon {
    * @param term - The terminal this readline is attached to.
    */
   public activate(term: Terminal): void {
-    this.promptGeneration++;
     this.term = term;
     // A prompt print in flight on a previous terminal never finishes for this
     // one; drop its bookkeeping so input is not queued forever.
-    this.printingPrompt = false;
-    this.pendingKeys = [];
-    this.resizePending = false;
-    this.promptMarker?.dispose();
-    this.promptMarker = undefined;
+    this.resetPrompt();
     this.disposables.push(this.term.onData(this.readData.bind(this)));
     this.disposables.push(
       this.term.onResize(({ cols, rows }) => {
@@ -92,16 +88,16 @@ export class Readline implements ITerminalAddon {
   }
 
   /**
-   * Dispose
+   * Dispose. A readline belongs to one terminal at a time; dispose it with
+   * that terminal.
    *
    */
   public dispose(): void {
-    this.activeRead?.cleanup?.();
-    this.promptGeneration++;
-    this.printingPrompt = false;
-    this.pendingKeys = [];
+    // Release a pending read so a re-activated addon can read again. Its
+    // promise stays pending, but its signal can still reject it.
+    this.activeRead = undefined;
+    this.resetPrompt();
     this.term = undefined;
-    this.promptMarker?.dispose();
     this.disposables.forEach((d) => d.dispose());
   }
 
@@ -137,9 +133,13 @@ export class Readline implements ITerminalAddon {
   }
 
   /**
-   * Set the ctrl-c handler, called both during and between reads. The handler
-   * can abort a read through its caller-owned AbortController. Otherwise an
-   * active read clears its input and reprints the prompt as usual.
+   * Set the ctrl-c handler. This function will be called if ctrl-c is encountered
+   * between readline reads. This may be used in circumstances where input from the
+   * user may result in a long running task that can be cancelled.
+   *
+   * It is also called during reads that were given a `signal`, before the
+   * input is cleared and the prompt reprinted. Aborting that signal from the
+   * handler cancels the read instead.
    *
    * @param fn - The ctrl-c handler.
    */
@@ -286,7 +286,7 @@ export class Readline implements ITerminalAddon {
         reject(new Error("a read is already active"));
         return;
       }
-      const read: ActiveRead = { prompt, resolve, reject };
+      const read: ActiveRead = { prompt, resolve, reject, signal };
       this.activeRead = read;
       if (signal !== undefined) {
         const abort = () => this.abortRead(read, signal.reason);
@@ -307,18 +307,37 @@ export class Readline implements ITerminalAddon {
   }
 
   private abortRead(read: ActiveRead, reason: unknown) {
-    if (this.activeRead !== read) return;
-    this.activeRead = undefined;
+    if (this.activeRead === read) {
+      // While a prompt is printing, the editing state isn't on screen yet.
+      if (!this.printingPrompt) {
+        // Leave the cursor after the abandoned input, as Enter does.
+        this.state.moveCursorToEnd();
+        this.state.refreshUnhighlighted();
+      }
+      // Forget abandoned input without erasing output or printing another prompt.
+      this.state = new State("", this.tty(), this.highlighter, this.history);
+    }
+    this.finishRead(read, () => read.reject(reason));
+  }
+
+  // A read released by dispose() is no longer active, but still settles.
+  private finishRead(read: ActiveRead, settle: () => void) {
     read.cleanup?.();
+    if (this.activeRead === read) {
+      this.activeRead = undefined;
+      this.resetPrompt();
+    }
+    settle();
+  }
+
+  // Invalidate prompt output still in flight and drop input queued behind it.
+  private resetPrompt() {
     this.promptGeneration++;
     this.printingPrompt = false;
     this.pendingKeys = [];
     this.resizePending = false;
     this.promptMarker?.dispose();
     this.promptMarker = undefined;
-    // Forget abandoned input without erasing output or printing another prompt.
-    this.state = new State("", this.tty(), this.highlighter, this.history);
-    read.reject(reason);
   }
 
   // Let xterm lay out the prompt, then anchor the editable input at its end.
@@ -326,12 +345,9 @@ export class Readline implements ITerminalAddon {
   private printPrompt(prompt: string, done: (tty: Tty) => void) {
     const term = this.term;
     if (term === undefined) return;
-    const read = this.activeRead;
+    // Re-activation, a newer prompt, and the end of the read all bump this.
     const generation = ++this.promptGeneration;
-    const isCurrent = () =>
-      this.term === term &&
-      this.activeRead === read &&
-      this.promptGeneration === generation;
+    const isCurrent = () => this.promptGeneration === generation;
     this.printingPrompt = true;
     let startRow = 0;
     const finish = () => {
@@ -348,11 +364,10 @@ export class Readline implements ITerminalAddon {
       }
       const pending = this.pendingKeys;
       this.pendingKeys = [];
-      for (const key of pending) {
-        if (this.activeRead !== read) break;
-        // Ctrl-C notifications were delivered when these keys arrived.
-        this.readKey(key, false);
-      }
+      // Keys typed after an Enter are handled between reads. During a read
+      // with a signal, Ctrl-C was already reported when it arrived.
+      const reported = this.activeRead?.signal !== undefined;
+      for (const key of pending) this.readKey(key, !reported);
     };
     const emit = () => {
       if (!isCurrent()) return;
@@ -441,11 +456,20 @@ export class Readline implements ITerminalAddon {
   }
 
   private readKey(input: Input, notifyCtrlC = true) {
-    if (input.inputType === InputType.CtrlC && notifyCtrlC) {
+    if (
+      input.inputType === InputType.CtrlC &&
+      notifyCtrlC &&
+      this.activeRead?.signal !== undefined
+    ) {
       const read = this.activeRead;
-      this.ctrlCHandler();
-      // Aborting may also synchronously start a replacement read.
-      if (this.activeRead !== read) return;
+      try {
+        this.ctrlCHandler();
+      } finally {
+        // Unless the handler aborted the read (and possibly started a
+        // replacement), reset it as usual.
+        if (this.activeRead === read) this.readKey(input, false);
+      }
+      return;
     }
     if (this.printingPrompt) {
       this.pendingKeys.push(input);
@@ -453,6 +477,9 @@ export class Readline implements ITerminalAddon {
     }
     if (this.activeRead === undefined) {
       switch (input.inputType) {
+        case InputType.CtrlC:
+          if (notifyCtrlC) this.ctrlCHandler();
+          break;
         case InputType.CtrlL:
           this.write("\x1b[H\x1b[2J");
           break;
@@ -476,9 +503,8 @@ export class Readline implements ITerminalAddon {
           this.state.refreshUnhighlighted();
           this.term?.write("\r\n");
           this.history.append(this.state.buffer());
-          this.activeRead?.cleanup?.();
-          this.activeRead?.resolve(this.state.buffer());
-          this.activeRead = undefined;
+          const read = this.activeRead;
+          this.finishRead(read, () => read.resolve(this.state.buffer()));
         } else {
           this.state.editInsert("\n");
         }

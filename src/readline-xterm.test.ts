@@ -81,7 +81,109 @@ test("Ctrl-C away from the end of the line starts the next prompt at column 0", 
   term.dispose();
 });
 
-test("Ctrl-C handler runs during and between reads without changing default reset behavior", async () => {
+test("by default the Ctrl-C handler only runs between reads", async () => {
+  const term = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  const handler = jest.fn();
+  term.loadAddon(rl);
+  rl.setCtrlCHandler(handler);
+  const read = rl.read("> ");
+  await drain(term);
+  term.input("abc");
+  term.input("\x03");
+  await drain(term);
+  expect(handler).not.toHaveBeenCalled();
+  expect(screen(term, 2)).toEqual(["> abc^C", "> "]);
+  term.input("\r");
+  expect(await read).toBe("");
+  await drain(term);
+  term.input("\x03");
+  expect(handler).toHaveBeenCalledTimes(1);
+  term.dispose();
+});
+
+test("keys queued behind Enter are handled between reads", async () => {
+  const term = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  const handler = jest.fn();
+  term.loadAddon(rl);
+  rl.setCtrlCHandler(handler);
+  term.write("banner\r\n");
+  const read = rl.read("> ");
+  // Typed while the prompt is still being printed, so all of it is queued.
+  term.input("ls");
+  term.input("\r");
+  term.input("\x0c");
+  term.input("\x03");
+  expect(await read).toBe("ls");
+  await drain(term);
+  expect(viewport(term).every((line) => line === "")).toBe(true);
+  expect(handler).toHaveBeenCalledTimes(1);
+  term.dispose();
+});
+
+test("aborting moves the cursor past the abandoned input", async () => {
+  const term = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  term.loadAddon(rl);
+  const controller = new AbortController();
+  const read = rl.read("> ", { signal: controller.signal });
+  const rejected = expect(read).rejects.toBeDefined();
+  await drain(term);
+  term.input("hello world");
+  term.input("\x01");
+  await drain(term);
+  controller.abort();
+  await rejected;
+  rl.println("cancelled");
+  await drain(term);
+  expect(screen(term, 2)).toEqual(["> hello worldcancelled", ""]);
+  term.dispose();
+});
+
+test("disposing mid-read does not wedge the addon on its next terminal", async () => {
+  const first = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  first.loadAddon(rl);
+  const controller = new AbortController();
+  const stale = rl.read("> ", { signal: controller.signal });
+  const rejected = expect(stale).rejects.toBe("cancelled");
+  await drain(first);
+  first.dispose();
+  const second = new Terminal({ cols: 40, rows: 8 });
+  second.loadAddon(rl);
+  const next = rl.read("> ");
+  await drain(second);
+  second.input("ok");
+  second.input("\r");
+  expect(await next).toBe("ok");
+  // The abandoned read still honors its signal.
+  controller.abort("cancelled");
+  await rejected;
+  second.dispose();
+});
+
+test("the Ctrl-C handler is not called during a read without a signal", async () => {
+  const term = new Terminal({ cols: 40, rows: 8 });
+  const rl = new Readline();
+  const handler = jest.fn();
+  term.loadAddon(rl);
+  rl.setCtrlCHandler(handler);
+  const read = rl.read("> ");
+  await drain(term);
+  term.input("abc");
+  term.input("\x03");
+  await drain(term);
+  expect(handler).not.toHaveBeenCalled();
+  expect(screen(term, 2)).toEqual(["> abc^C", "> "]);
+  term.input("\r");
+  expect(await read).toBe("");
+  term.input("\x03");
+  expect(handler).toHaveBeenCalledTimes(1);
+  term.dispose();
+});
+
+test("during a read with a signal, the Ctrl-C handler runs during and between reads without changing default reset behavior", async () => {
   const term = new Terminal({ cols: 40, rows: 8 });
   const rl = new Readline();
   const handler = jest.fn();
@@ -92,7 +194,7 @@ test("Ctrl-C handler runs during and between reads without changing default rese
   expect(handler).toHaveBeenCalledTimes(1);
   handler.mockClear();
 
-  const read = rl.read("> ");
+  const read = rl.read("> ", { signal: new AbortController().signal });
   const settled = jest.fn();
   void read.then(settled, settled);
   await drain(term);
@@ -222,7 +324,7 @@ test("a non-aborting Ctrl-C handler runs once when the prompt is queued", async 
   const handler = jest.fn();
   term.loadAddon(rl);
   rl.setCtrlCHandler(handler);
-  const read = rl.read("> ");
+  const read = rl.read("> ", { signal: new AbortController().signal });
   term.input("\x03");
   expect(handler).toHaveBeenCalledTimes(1);
   await drain(term);
