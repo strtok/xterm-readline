@@ -56,6 +56,24 @@ function processLine(text) {
 readLine();
 ```
 
+# Cancelling a read
+
+`read()` accepts an optional `AbortSignal`. Aborting it rejects the pending read with `signal.reason`.
+
+```typescript
+const controller = new AbortController();
+rl.read(">", { signal: controller.signal }).then(processLine, () => {});
+controller.abort();
+```
+
+During a read with a signal, the Ctrl-C handler is also called, so it can abort the read:
+
+```typescript
+rl.setCtrlCHandler(() => controller.abort());
+```
+
+Reads without a signal keep the old behavior: Ctrl-C only clears the line.
+
 # Keyboard Shortcuts
 
 Key             | Action
@@ -89,4 +107,4 @@ npm run demo
 
 # License Agreement
 
-If you contribute code to this project, you implicitly allow your code to be distributed under the MIT license. 
+If you contribute code to this project, you implicitly allow your code to be distributed under the MIT license.

@@ -107,6 +107,24 @@ test("typing through onData drives State and updates the screen", async () => {
   expect(await promise).toBe("hello");
 });
 
+// xterm reports listener errors asynchronously, so this needs the stub to see
+// the handler's exception.
+test("a throwing Ctrl-C handler still resets the read", async () => {
+  const term = new StubTerminal(20, 6);
+  const rl = new Readline();
+  rl.activate(term as unknown as Parameters<typeof rl.activate>[0]);
+  rl.setCtrlCHandler(() => {
+    throw new Error("boom");
+  });
+  const promise = rl.read("> ", { signal: new AbortController().signal });
+  term.feedData("abc");
+  expect(() => term.feedData("\x03")).toThrow("boom");
+  expect(rl.getLine()).toBe("");
+  expect(term.vt.screen()).toBe("> abc^C\n>");
+  term.feedData("\r");
+  expect(await promise).toBe("");
+});
+
 test("read preserves prior output through editing and submission", async () => {
   const term = new StubTerminal(20, 6);
   const rl = new Readline();

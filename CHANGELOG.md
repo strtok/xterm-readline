@@ -1,3 +1,22 @@
+## [2.0.0] - Unreleased
+### Added
+- `read(prompt, { signal })`: aborting the `AbortSignal` rejects the pending
+  read with `signal.reason`. An already-aborted signal rejects without
+  printing a prompt. Abandoned input stays on screen and the cursor is left
+  after it; no `^C` or new prompt is printed (#12, #18).
+- During a read with a signal, Ctrl-C also calls the `setCtrlCHandler()`
+  handler, which can abort the read. Reads without a signal behave as before.
+
+### Changed
+- **Breaking:** calling `read()` while another read is pending now rejects
+  with "a read is already active" instead of replacing the pending read.
+
+### Fixed
+- `dispose()` releases a pending read, so an addon loaded again can read again.
+  The released promise stays pending unless its signal is aborted.
+- Prompt output still in flight after a cancel, re-activation, or a newer
+  prompt can no longer reset input or resume a finished read.
+
 ## [1.3.1] - 2026-10-04
 ### Fixed
 - Prompts containing characters whose width xterm measures differently
